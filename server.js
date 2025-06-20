@@ -113,20 +113,36 @@ app.post('/api/tasks', (req, res) => {
     return;
   }
 
-  const query = 'INSERT INTO recurring_tasks (title, description) VALUES (?, ?)';
-  db.run(query, [title, description], function(err) {
+  const normalizedTitle = title.trim();
+
+  // Vérifier si une tâche avec le même titre existe déjà (insensible à la casse)
+  const checkQuery = 'SELECT id FROM recurring_tasks WHERE UPPER(title) = UPPER(?)';
+  db.get(checkQuery, [normalizedTitle], (err, row) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
     }
+
+    if (row) {
+      res.status(409).json({ error: 'Une tâche avec ce titre existe déjà.' });
+      return;
+    }
     
-    // Récupérer la tâche créée
-    db.get('SELECT * FROM recurring_tasks WHERE id = ?', [this.lastID], (err, row) => {
+    const query = 'INSERT INTO recurring_tasks (title, description) VALUES (?, ?)';
+    db.run(query, [normalizedTitle, description], function(err) {
       if (err) {
         res.status(500).json({ error: err.message });
         return;
       }
-      res.status(201).json(row);
+      
+      // Récupérer la tâche créée
+      db.get('SELECT * FROM recurring_tasks WHERE id = ?', [this.lastID], (err, newRow) => {
+        if (err) {
+          res.status(500).json({ error: err.message });
+          return;
+        }
+        res.status(201).json(newRow);
+      });
     });
   });
 });

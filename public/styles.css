@@ -252,6 +252,9 @@ body {
     display: flex;
     flex-direction: column;
     gap: 15px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 10px;
 }
 
 .task-item {
@@ -261,6 +264,7 @@ body {
     padding: 20px;
     transition: all 0.3s ease;
     position: relative;
+    color: #a0aec0;
 }
 
 .task-item:hover {
@@ -787,5 +791,24 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+}
+
+/* Scrollbar personnalisée pour la liste des tâches */
+.tasks-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tasks-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.tasks-list::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 4px;
+}
+
+.tasks-list::-webkit-scrollbar-thumb:hover {
     background: #a0aec0;
 } 

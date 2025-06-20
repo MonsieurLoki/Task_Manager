@@ -77,6 +77,8 @@ class DailyTaskManager {
 
         // Vue historique
         this.loadHistoryBtn.addEventListener('click', () => this.loadHistory());
+        this.historyStartDate.addEventListener('input', () => this.updateHistoryDateLimits('start'));
+        this.historyEndDate.addEventListener('input', () => this.updateHistoryDateLimits('end'));
 
         // Modal d'édition
         this.closeModalBtn.addEventListener('click', () => this.closeModal());
@@ -151,10 +153,40 @@ class DailyTaskManager {
     initializeHistoryDates() {
         const today = new Date();
         const lastWeek = new Date(today);
-        lastWeek.setDate(today.getDate() - 7);
+        lastWeek.setDate(today.getDate() - 6);
         
         this.historyStartDate.value = lastWeek.toISOString().split('T')[0];
         this.historyEndDate.value = today.toISOString().split('T')[0];
+        this.updateHistoryDateLimits('start');
+    }
+
+    updateHistoryDateLimits(changedInput) {
+        const startDateInput = this.historyStartDate;
+        const endDateInput = this.historyEndDate;
+
+        if (changedInput === 'start') {
+            const startDate = new Date(startDateInput.value);
+            const maxEndDate = new Date(startDate);
+            maxEndDate.setDate(startDate.getDate() + 12);
+
+            endDateInput.min = startDateInput.value;
+            endDateInput.max = maxEndDate.toISOString().split('T')[0];
+            
+            if (new Date(endDateInput.value) > maxEndDate) {
+                endDateInput.value = endDateInput.max;
+            }
+        } else { // 'end'
+            const endDate = new Date(endDateInput.value);
+            const minStartDate = new Date(endDate);
+            minStartDate.setDate(endDate.getDate() - 12);
+            
+            startDateInput.max = endDateInput.value;
+            startDateInput.min = minStartDate.toISOString().split('T')[0];
+
+            if (new Date(startDateInput.value) < minStartDate) {
+                startDateInput.value = startDateInput.min;
+            }
+        }
     }
 
     async loadTasks() {
@@ -215,8 +247,10 @@ class DailyTaskManager {
         const end = new Date(endDate);
         const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
         
+        if (daysDiff < 0) return; // Ignore if dates are invalid
+
         if (daysDiff > 13) {
-            this.showNotification('La période ne peut pas dépasser 13 jours', 'error');
+            this.showNotification('La période ne peut pas dépasser 13 jours.', 'error');
             return;
         }
 
@@ -360,7 +394,10 @@ class DailyTaskManager {
                 })
             });
 
-            if (!response.ok) throw new Error('Erreur lors de l\'ajout de la tâche');
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Une erreur est survenue.');
+            }
             
             const newTask = await response.json();
             this.tasks.push({
@@ -375,7 +412,7 @@ class DailyTaskManager {
             this.showNotification('Tâche récurrente ajoutée avec succès', 'success');
         } catch (error) {
             console.error('Erreur:', error);
-            this.showNotification('Erreur lors de l\'ajout de la tâche', 'error');
+            this.showNotification(error.message, 'error');
         }
     }
 
@@ -399,7 +436,10 @@ class DailyTaskManager {
                 })
             });
 
-            if (!response.ok) throw new Error('Erreur lors de la modification de la tâche');
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Une erreur est survenue.');
+            }
             
             const updatedTask = await response.json();
             const index = this.tasks.findIndex(t => t.id === this.editingTaskId);
@@ -412,7 +452,7 @@ class DailyTaskManager {
             this.showNotification('Tâche modifiée avec succès', 'success');
         } catch (error) {
             console.error('Erreur:', error);
-            this.showNotification('Erreur lors de la modification de la tâche', 'error');
+            this.showNotification(error.message, 'error');
         }
     }
 
@@ -471,7 +511,10 @@ class DailyTaskManager {
                 })
             });
 
-            if (!response.ok) throw new Error('Erreur lors de la validation de la tâche');
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Une erreur est survenue.');
+            }
             
             // Mettre à jour localement
             const task = this.tasks.find(t => t.id === this.validatingTaskId);
@@ -489,7 +532,7 @@ class DailyTaskManager {
             this.showNotification('Tâche validée avec succès', 'success');
         } catch (error) {
             console.error('Erreur:', error);
-            this.showNotification('Erreur lors de la validation de la tâche', 'error');
+            this.showNotification(error.message, 'error');
         }
     }
 
@@ -501,7 +544,10 @@ class DailyTaskManager {
                 method: 'DELETE'
             });
 
-            if (!response.ok) throw new Error('Erreur lors de la suppression de la tâche');
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Une erreur est survenue.');
+            }
             
             this.tasks = this.tasks.filter(t => t.id !== taskId);
             this.renderTasks();
@@ -509,7 +555,7 @@ class DailyTaskManager {
             this.showNotification('Tâche supprimée avec succès', 'success');
         } catch (error) {
             console.error('Erreur:', error);
-            this.showNotification('Erreur lors de la suppression de la tâche', 'error');
+            this.showNotification(error.message, 'error');
         }
     }
 
