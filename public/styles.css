@@ -517,6 +517,12 @@ body {
     text-align: center;
 }
 
+.percentage-cell {
+    font-weight: bold;
+    text-align: center;
+    background-color: #f7fafc;
+}
+
 .status-indicator {
     display: inline-flex;
     align-items: center;
@@ -546,6 +552,48 @@ body {
 .status-indicator.empty {
     background: #e2e8f0;
     color: #a0aec0;
+}
+
+/* Tooltip pour les notes */
+.note-tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    margin-left: 5px;
+}
+
+.note-tooltip .tooltip-text {
+    visibility: hidden;
+    width: 220px;
+    background-color: #555;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 8px;
+    position: absolute;
+    z-index: 1;
+    bottom: 140%;
+    left: 50%;
+    margin-left: -110px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.note-tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+.note-tooltip .tooltip-text::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #555 transparent transparent transparent;
 }
 
 /* Modal de validation */

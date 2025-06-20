@@ -167,7 +167,7 @@ class DailyTaskManager {
         if (changedInput === 'start') {
             const startDate = new Date(startDateInput.value);
             const maxEndDate = new Date(startDate);
-            maxEndDate.setDate(startDate.getDate() + 12);
+            maxEndDate.setDate(startDate.getDate() + 11);
 
             endDateInput.min = startDateInput.value;
             endDateInput.max = maxEndDate.toISOString().split('T')[0];
@@ -178,7 +178,7 @@ class DailyTaskManager {
         } else { // 'end'
             const endDate = new Date(endDateInput.value);
             const minStartDate = new Date(endDate);
-            minStartDate.setDate(endDate.getDate() - 12);
+            minStartDate.setDate(endDate.getDate() - 11);
             
             startDateInput.max = endDateInput.value;
             startDateInput.min = minStartDate.toISOString().split('T')[0];
@@ -242,15 +242,15 @@ class DailyTaskManager {
             return;
         }
 
-        // Vérifier que la période ne dépasse pas 13 jours
+        // Vérifier que la période ne dépasse pas 12 jours
         const start = new Date(startDate);
         const end = new Date(endDate);
         const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
         
         if (daysDiff < 0) return; // Ignore if dates are invalid
 
-        if (daysDiff > 13) {
-            this.showNotification('La période ne peut pas dépasser 13 jours.', 'error');
+        if (daysDiff > 12) {
+            this.showNotification('La période ne peut pas dépasser 12 jours.', 'error');
             return;
         }
 
@@ -305,12 +305,17 @@ class DailyTaskManager {
                     <tr>
                         <th>Tâche</th>
                         ${dates.map(date => `<th>${this.formatDateForTable(date)}</th>`).join('')}
+                        <th>Valid. %</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
 
         tasksMap.forEach(task => {
+            const completedCount = task.validations.filter(v => v.status === 2).length;
+            const totalDays = dates.length;
+            const percentage = totalDays > 0 ? Math.round((completedCount / totalDays) * 100) : 0;
+
             tableHTML += `<tr>
                 <td class="task-name">${this.escapeHtml(task.title)}</td>
                 ${dates.map(date => {
@@ -323,11 +328,16 @@ class DailyTaskManager {
                     let cellContent = `<span class="status-indicator ${statusClass}">${statusText}</span>`;
                     
                     if (validation.note) {
-                        cellContent += `<div class="note-tooltip" title="${this.escapeHtml(validation.note)}">📝</div>`;
+                        cellContent += `
+                            <div class="note-tooltip">📝
+                                <span class="tooltip-text">${this.escapeHtml(validation.note)}</span>
+                            </div>
+                        `;
                     }
                     
                     return `<td class="status-cell">${cellContent}</td>`;
                 }).join('')}
+                <td class="percentage-cell">${percentage}%</td>
             </tr>`;
         });
 
