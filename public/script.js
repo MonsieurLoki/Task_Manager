@@ -1,24 +1,25 @@
 class DailyTaskManager {
     constructor() {
-        this.currentDate = new Date().toISOString().split('T')[0];
+        this.currentWeekStart = this.getWeekStart(new Date());
         this.tasks = [];
         this.editingTaskId = null;
+        this.validatingTaskId = null;
+        this.selectedStatus = null;
         this.currentView = 'daily'; // 'daily' ou 'history'
         
         this.initializeElements();
         this.bindEvents();
         this.loadTasks();
-        this.updateDateDisplay();
+        this.updateWeekDisplay();
         this.initializeHistoryDates();
     }
 
     initializeElements() {
-        // Éléments de date
-        this.selectedDateInput = document.getElementById('selectedDate');
-        this.prevDateBtn = document.getElementById('prevDate');
-        this.nextDateBtn = document.getElementById('nextDate');
-        this.todayBtn = document.getElementById('todayBtn');
-        this.currentDateDisplay = document.getElementById('currentDateDisplay');
+        // Éléments de navigation par semaine
+        this.prevWeekBtn = document.getElementById('prevWeek');
+        this.nextWeekBtn = document.getElementById('nextWeek');
+        this.thisWeekBtn = document.getElementById('thisWeekBtn');
+        this.weekDisplay = document.getElementById('weekDisplay');
 
         // Boutons de vue
         this.dailyViewBtn = document.getElementById('dailyViewBtn');
@@ -52,20 +53,20 @@ class DailyTaskManager {
         this.closeModalBtn = document.getElementById('closeModal');
         this.cancelEditBtn = document.getElementById('cancelEdit');
 
-        // Initialiser la date sélectionnée
-        this.selectedDateInput.value = this.currentDate;
+        // Modal de validation
+        this.validationModal = document.getElementById('validationModal');
+        this.validationForm = document.getElementById('validationForm');
+        this.validationNote = document.getElementById('validationNote');
+        this.closeValidationModalBtn = document.getElementById('closeValidationModal');
+        this.cancelValidation = document.getElementById('cancelValidation');
+        this.statusButtons = document.querySelectorAll('.status-btn');
     }
 
     bindEvents() {
-        // Navigation de date
-        this.prevDateBtn.addEventListener('click', () => this.changeDate(-1));
-        this.nextDateBtn.addEventListener('click', () => this.changeDate(1));
-        this.todayBtn.addEventListener('click', () => this.goToToday());
-        this.selectedDateInput.addEventListener('change', (e) => {
-            this.currentDate = e.target.value;
-            this.loadTasks();
-            this.updateDateDisplay();
-        });
+        // Navigation par semaine
+        this.prevWeekBtn.addEventListener('click', () => this.changeWeek(-1));
+        this.nextWeekBtn.addEventListener('click', () => this.changeWeek(1));
+        this.thisWeekBtn.addEventListener('click', () => this.goToThisWeek());
 
         // Changement de vue
         this.dailyViewBtn.addEventListener('click', () => this.switchView('daily'));
@@ -82,19 +83,53 @@ class DailyTaskManager {
         this.cancelEditBtn.addEventListener('click', () => this.closeModal());
         this.editForm.addEventListener('submit', (e) => this.handleEditTask(e));
 
-        // Fermer modal en cliquant à l'extérieur
+        // Modal de validation
+        this.closeValidationModalBtn.addEventListener('click', () => this.closeValidationModal());
+        this.cancelValidation.addEventListener('click', () => this.closeValidationModal());
+        this.validationForm.addEventListener('submit', (e) => this.handleValidation(e));
+
+        // Boutons de statut
+        this.statusButtons.forEach(btn => {
+            btn.addEventListener('click', () => this.selectStatus(btn));
+        });
+
+        // Fermer modals en cliquant à l'extérieur
         this.editModal.addEventListener('click', (e) => {
             if (e.target === this.editModal) {
                 this.closeModal();
             }
         });
 
-        // Fermer modal avec Escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.editModal.classList.contains('show')) {
-                this.closeModal();
+        this.validationModal.addEventListener('click', (e) => {
+            if (e.target === this.validationModal) {
+                this.closeValidationModal();
             }
         });
+
+        // Fermer modals avec Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (this.editModal.classList.contains('show')) {
+                    this.closeModal();
+                }
+                if (this.validationModal.classList.contains('show')) {
+                    this.closeValidationModal();
+                }
+            }
+        });
+    }
+
+    getWeekStart(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Lundi = 1, Dimanche = 0
+        return new Date(d.setDate(diff));
+    }
+
+    getWeekEnd(weekStart) {
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        return weekEnd;
     }
 
     switchView(view) {
@@ -124,10 +159,14 @@ class DailyTaskManager {
 
     async loadTasks() {
         try {
-            const response = await fetch(`/api/tasks?date=${this.currentDate}`);
+            // Charger les tâches pour toute la semaine
+            const weekEnd = this.getWeekEnd(this.currentWeekStart);
+            const response = await fetch(`/api/tasks/history?start_date=${this.currentWeekStart.toISOString().split('T')[0]}&end_date=${weekEnd.toISOString().split('T')[0]}`);
+            
             if (!response.ok) throw new Error('Erreur lors du chargement des tâches');
             
-            this.tasks = await response.json();
+            const weekData = await response.json();
+            this.processWeekData(weekData);
             this.renderTasks();
             this.updateStats();
         } catch (error) {
@@ -136,12 +175,48 @@ class DailyTaskManager {
         }
     }
 
+    processWeekData(weekData) {
+        // Grouper les données par tâche
+        const tasksMap = new Map();
+        
+        weekData.forEach(item => {
+            if (!tasksMap.has(item.id)) {
+                tasksMap.set(item.id, {
+                    id: item.id,
+                    title: item.title,
+                    description: item.description,
+                    created_at: item.created_at,
+                    validations: {}
+                });
+            }
+            
+            if (item.date) {
+                tasksMap.get(item.id).validations[item.date] = {
+                    status: item.status,
+                    note: item.note
+                };
+            }
+        });
+
+        this.tasks = Array.from(tasksMap.values());
+    }
+
     async loadHistory() {
         const startDate = this.historyStartDate.value;
         const endDate = this.historyEndDate.value;
         
         if (!startDate || !endDate) {
             this.showNotification('Veuillez sélectionner une période', 'error');
+            return;
+        }
+
+        // Vérifier que la période ne dépasse pas 13 jours
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (daysDiff > 13) {
+            this.showNotification('La période ne peut pas dépasser 13 jours', 'error');
             return;
         }
 
@@ -180,7 +255,8 @@ class DailyTaskManager {
             if (item.date) {
                 tasksMap.get(item.id).validations.push({
                     date: item.date,
-                    completed: item.completed
+                    status: item.status,
+                    note: item.note
                 });
             }
         });
@@ -208,15 +284,39 @@ class DailyTaskManager {
                     if (!validation) {
                         return '<td class="status-cell"><span class="status-indicator empty">-</span></td>';
                     }
-                    const statusClass = validation.completed ? 'completed' : 'not-done';
-                    const statusText = validation.completed ? '✓' : '✗';
-                    return `<td class="status-cell"><span class="status-indicator ${statusClass}">${statusText}</span></td>`;
+                    const statusClass = this.getStatusClass(validation.status);
+                    const statusText = this.getStatusText(validation.status);
+                    let cellContent = `<span class="status-indicator ${statusClass}">${statusText}</span>`;
+                    
+                    if (validation.note) {
+                        cellContent += `<div class="note-tooltip" title="${this.escapeHtml(validation.note)}">📝</div>`;
+                    }
+                    
+                    return `<td class="status-cell">${cellContent}</td>`;
                 }).join('')}
             </tr>`;
         });
 
         tableHTML += '</tbody></table>';
         this.historyTable.innerHTML = tableHTML;
+    }
+
+    getStatusClass(status) {
+        switch (status) {
+            case 2: return 'completed';
+            case 1: return 'partial';
+            case 0: return 'not-done';
+            default: return 'empty';
+        }
+    }
+
+    getStatusText(status) {
+        switch (status) {
+            case 2: return '✓';
+            case 1: return '~';
+            case 0: return '✗';
+            default: return '-';
+        }
     }
 
     generateDateRange(startDate, endDate) {
@@ -263,7 +363,10 @@ class DailyTaskManager {
             if (!response.ok) throw new Error('Erreur lors de l\'ajout de la tâche');
             
             const newTask = await response.json();
-            this.tasks.push(newTask);
+            this.tasks.push({
+                ...newTask,
+                validations: {}
+            });
             this.renderTasks();
             this.updateStats();
             
@@ -313,33 +416,77 @@ class DailyTaskManager {
         }
     }
 
-    async toggleTaskValidation(taskId) {
+    openValidationModal(taskId, date) {
+        this.validatingTaskId = taskId;
+        this.validatingDate = date;
+        this.selectedStatus = null;
+        
+        // Réinitialiser les boutons
+        this.statusButtons.forEach(btn => btn.classList.remove('active'));
+        
+        // Pré-remplir avec le statut actuel s'il existe
         const task = this.tasks.find(t => t.id === taskId);
-        if (!task) return;
+        if (task && task.validations[date]) {
+            const currentStatus = task.validations[date].status;
+            this.selectedStatus = currentStatus;
+            this.statusButtons.forEach(btn => {
+                if (parseInt(btn.dataset.status) === currentStatus) {
+                    btn.classList.add('active');
+                }
+            });
+            this.validationNote.value = task.validations[date].note || '';
+        } else {
+            this.validationNote.value = '';
+        }
+        
+        this.validationModal.classList.add('show');
+    }
 
-        const newStatus = !task.completed;
+    selectStatus(button) {
+        this.statusButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        this.selectedStatus = parseInt(button.dataset.status);
+    }
+
+    async handleValidation(e) {
+        e.preventDefault();
+        
+        if (this.selectedStatus === null) {
+            this.showNotification('Veuillez sélectionner un statut', 'error');
+            return;
+        }
+
+        const note = this.validationNote.value.trim();
 
         try {
-            const response = await fetch(`/api/tasks/${taskId}/validate`, {
+            const response = await fetch(`/api/tasks/${this.validatingTaskId}/validate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    date: this.currentDate,
-                    completed: newStatus
+                    date: this.validatingDate,
+                    status: this.selectedStatus,
+                    note: note || null
                 })
             });
 
             if (!response.ok) throw new Error('Erreur lors de la validation de la tâche');
             
             // Mettre à jour localement
-            task.completed = newStatus;
-            this.renderTasks();
-            this.updateStats();
+            const task = this.tasks.find(t => t.id === this.validatingTaskId);
+            if (task) {
+                if (!task.validations[this.validatingDate]) {
+                    task.validations[this.validatingDate] = {};
+                }
+                task.validations[this.validatingDate].status = this.selectedStatus;
+                task.validations[this.validatingDate].note = note || null;
+                this.renderTasks();
+                this.updateStats();
+            }
             
-            const statusText = newStatus ? 'validée' : 'invalidée';
-            this.showNotification(`Tâche ${statusText} avec succès`, 'success');
+            this.closeValidationModal();
+            this.showNotification('Tâche validée avec succès', 'success');
         } catch (error) {
             console.error('Erreur:', error);
             this.showNotification('Erreur lors de la validation de la tâche', 'error');
@@ -383,6 +530,14 @@ class DailyTaskManager {
         this.editForm.reset();
     }
 
+    closeValidationModal() {
+        this.validationModal.classList.remove('show');
+        this.validatingTaskId = null;
+        this.validatingDate = null;
+        this.selectedStatus = null;
+        this.validationForm.reset();
+    }
+
     renderTasks() {
         if (this.tasks.length === 0) {
             this.tasksList.style.display = 'none';
@@ -393,61 +548,103 @@ class DailyTaskManager {
         this.tasksList.style.display = 'block';
         this.noTasksDiv.style.display = 'none';
 
-        this.tasksList.innerHTML = this.tasks.map(task => `
-            <div class="task-item ${task.completed ? 'completed' : ''}" data-id="${task.id}">
-                <div class="task-header">
-                    <div class="task-checkbox ${task.completed ? 'checked' : 'not-done'}" 
-                         onclick="taskManager.toggleTaskValidation(${task.id})" 
-                         title="${task.completed ? 'Cliquer pour invalider' : 'Cliquer pour valider'}">
+        // Générer les dates de la semaine
+        const weekDates = [];
+        const current = new Date(this.currentWeekStart);
+        for (let i = 0; i < 7; i++) {
+            weekDates.push(new Date(current));
+            current.setDate(current.getDate() + 1);
+        }
+
+        this.tasksList.innerHTML = this.tasks.map(task => {
+            const taskValidations = weekDates.map(date => {
+                const dateStr = date.toISOString().split('T')[0];
+                const validation = task.validations[dateStr];
+                const status = validation ? validation.status : null;
+                const note = validation ? validation.note : null;
+                
+                return {
+                    date: dateStr,
+                    status: status,
+                    note: note,
+                    displayDate: date.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' })
+                };
+            });
+
+            return `
+                <div class="task-item" data-id="${task.id}">
+                    <div class="task-header">
+                        <div class="task-title">${this.escapeHtml(task.title)}</div>
                     </div>
-                    <div class="task-title">${this.escapeHtml(task.title)}</div>
+                    ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
+                    
+                    <div class="week-validations">
+                        ${taskValidations.map(validation => {
+                            const statusClass = validation.status !== null ? this.getStatusClass(validation.status) : 'empty';
+                            const statusText = validation.status !== null ? this.getStatusText(validation.status) : '-';
+                            const hasNote = validation.note && validation.note.trim() !== '';
+                            
+                            return `
+                                <div class="day-validation">
+                                    <div class="day-label">${validation.displayDate}</div>
+                                    <div class="task-checkbox ${statusClass}" 
+                                         onclick="taskManager.openValidationModal(${task.id}, '${validation.date}')"
+                                         title="${hasNote ? 'Note: ' + this.escapeHtml(validation.note) : 'Cliquer pour valider'}">
+                                        ${statusText}
+                                    </div>
+                                    ${hasNote ? `<div class="note-indicator" title="${this.escapeHtml(validation.note)}">📝</div>` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    
+                    <div class="task-actions">
+                        <button class="action-btn edit" onclick="taskManager.openEditModal(${task.id})" title="Modifier">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="action-btn delete" onclick="taskManager.deleteTask(${task.id})" title="Supprimer">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
-                ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
-                <div class="task-actions">
-                    <button class="action-btn edit" onclick="taskManager.openEditModal(${task.id})" title="Modifier">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="action-btn delete" onclick="taskManager.deleteTask(${task.id})" title="Supprimer">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     updateStats() {
-        const completed = this.tasks.filter(t => t.completed).length;
-        const total = this.tasks.length;
+        let completed = 0;
+        let total = 0;
+
+        this.tasks.forEach(task => {
+            Object.values(task.validations).forEach(validation => {
+                total++;
+                if (validation.status === 2) { // Completed
+                    completed++;
+                }
+            });
+        });
         
         this.completedCountSpan.textContent = completed;
         this.totalCountSpan.textContent = total;
     }
 
-    updateDateDisplay() {
-        const date = new Date(this.currentDate);
-        const options = { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-        };
-        this.currentDateDisplay.textContent = date.toLocaleDateString('fr-FR', options);
+    updateWeekDisplay() {
+        const weekEnd = this.getWeekEnd(this.currentWeekStart);
+        const startStr = this.currentWeekStart.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+        const endStr = weekEnd.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        this.weekDisplay.textContent = `Semaine du ${startStr} au ${endStr}`;
     }
 
-    changeDate(days) {
-        const date = new Date(this.currentDate);
-        date.setDate(date.getDate() + days);
-        this.currentDate = date.toISOString().split('T')[0];
-        this.selectedDateInput.value = this.currentDate;
+    changeWeek(weeks) {
+        this.currentWeekStart.setDate(this.currentWeekStart.getDate() + (weeks * 7));
         this.loadTasks();
-        this.updateDateDisplay();
+        this.updateWeekDisplay();
     }
 
-    goToToday() {
-        this.currentDate = new Date().toISOString().split('T')[0];
-        this.selectedDateInput.value = this.currentDate;
+    goToThisWeek() {
+        this.currentWeekStart = this.getWeekStart(new Date());
         this.loadTasks();
-        this.updateDateDisplay();
+        this.updateWeekDisplay();
     }
 
     escapeHtml(text) {
@@ -513,6 +710,39 @@ style.textContent = `
             transform: translateX(100%);
             opacity: 0;
         }
+    }
+    
+    .week-validations {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .day-validation {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .day-label {
+        font-size: 0.8rem;
+        color: #718096;
+        font-weight: 500;
+    }
+    
+    .note-indicator {
+        font-size: 0.8rem;
+        color: #e53e3e;
+        cursor: help;
+    }
+    
+    .note-tooltip {
+        font-size: 0.8rem;
+        color: #e53e3e;
+        cursor: help;
+        margin-left: 5px;
     }
 `;
 document.head.appendChild(style);

@@ -13,10 +13,10 @@
             <h1><i class="fas fa-calendar-check"></i> Tâches Quotidiennes</h1>
             <div class="header-controls">
                 <div class="date-selector">
-                    <button id="prevDate" class="btn-icon"><i class="fas fa-chevron-left"></i></button>
-                    <input type="date" id="selectedDate" class="date-input">
-                    <button id="nextDate" class="btn-icon"><i class="fas fa-chevron-right"></i></button>
-                    <button id="todayBtn" class="btn-secondary">Aujourd'hui</button>
+                    <button id="prevWeek" class="btn-icon"><i class="fas fa-chevron-left"></i></button>
+                    <span id="weekDisplay" class="week-display">Semaine du ...</span>
+                    <button id="nextWeek" class="btn-icon"><i class="fas fa-chevron-right"></i></button>
+                    <button id="thisWeekBtn" class="btn-secondary">Cette semaine</button>
                 </div>
                 <div class="view-toggle">
                     <button id="dailyViewBtn" class="btn-secondary active">Vue Quotidienne</button>
@@ -45,7 +45,7 @@
 
                 <div class="tasks-container">
                     <div class="tasks-header">
-                        <h2>Tâches du <span id="currentDateDisplay"></span></h2>
+                        <h2>Tâches de la semaine</h2>
                         <div class="stats">
                             <span id="completedCount">0</span> / <span id="totalCount">0</span> validées
                         </div>
@@ -67,7 +67,7 @@
             <div id="historyView" class="view-container" style="display: none;">
                 <div class="history-controls">
                     <div class="period-selector">
-                        <label for="historyStartDate">Période :</label>
+                        <label for="historyStartDate">Période (max 13 jours) :</label>
                         <input type="date" id="historyStartDate" class="date-input">
                         <span>à</span>
                         <input type="date" id="historyEndDate" class="date-input">
@@ -80,6 +80,20 @@
                 <div class="history-container">
                     <div class="history-header">
                         <h2>Historique des validations</h2>
+                        <div class="status-legend">
+                            <span class="legend-item">
+                                <span class="status-indicator completed">✓</span> Fait
+                            </span>
+                            <span class="legend-item">
+                                <span class="status-indicator partial">~</span> Partiellement
+                            </span>
+                            <span class="legend-item">
+                                <span class="status-indicator not-done">✗</span> Non fait
+                            </span>
+                            <span class="legend-item">
+                                <span class="status-indicator empty">-</span> Non validé
+                            </span>
+                        </div>
                     </div>
 
                     <div id="historyTable" class="history-table">
@@ -112,6 +126,40 @@
                     <div class="form-actions">
                         <button type="button" id="cancelEdit" class="btn-secondary">Annuler</button>
                         <button type="submit" class="btn-primary">Sauvegarder</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal pour valider une tâche -->
+        <div id="validationModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Valider la tâche</h3>
+                    <button id="closeValidationModal" class="btn-icon"><i class="fas fa-times"></i></button>
+                </div>
+                <form id="validationForm" class="validation-form">
+                    <div class="validation-status">
+                        <label>Statut :</label>
+                        <div class="status-buttons">
+                            <button type="button" class="status-btn completed" data-status="2">
+                                <i class="fas fa-check"></i> Fait
+                            </button>
+                            <button type="button" class="status-btn partial" data-status="1">
+                                <i class="fas fa-minus"></i> Partiellement
+                            </button>
+                            <button type="button" class="status-btn not-done" data-status="0">
+                                <i class="fas fa-times"></i> Non fait
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="validationNote">Note (optionnelle) :</label>
+                        <textarea id="validationNote" placeholder="Expliquez pourquoi la tâche n'est pas faite ou partiellement faite..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" id="cancelValidation" class="btn-secondary">Annuler</button>
+                        <button type="submit" class="btn-primary">Valider</button>
                     </div>
                 </form>
             </div>

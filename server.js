@@ -25,12 +25,13 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  // Table des validations quotidiennes
+  // Table des validations quotidiennes avec notes et états
   db.run(`CREATE TABLE IF NOT EXISTS daily_validations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id INTEGER NOT NULL,
     date TEXT NOT NULL,
-    completed BOOLEAN DEFAULT 0,
+    status INTEGER DEFAULT 0,
+    note TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (task_id) REFERENCES recurring_tasks (id),
     UNIQUE(task_id, date)
@@ -54,7 +55,8 @@ app.get('/api/tasks', (req, res) => {
       rt.title,
       rt.description,
       rt.created_at,
-      COALESCE(dv.completed, 0) as completed,
+      COALESCE(dv.status, 0) as status,
+      dv.note,
       dv.date as validation_date
     FROM recurring_tasks rt
     LEFT JOIN daily_validations dv ON rt.id = dv.task_id AND dv.date = ?
@@ -83,12 +85,14 @@ app.get('/api/tasks/history', (req, res) => {
     SELECT 
       rt.id,
       rt.title,
+      rt.description,
+      rt.created_at,
       dv.date,
-      dv.completed
+      dv.status,
+      dv.note
     FROM recurring_tasks rt
-    LEFT JOIN daily_validations dv ON rt.id = dv.task_id 
-    WHERE dv.date BETWEEN ? AND ?
-    ORDER BY rt.title, dv.date
+    LEFT JOIN daily_validations dv ON rt.id = dv.task_id AND dv.date BETWEEN ? AND ?
+    ORDER BY rt.created_at ASC, dv.date ASC
   `;
 
   db.all(query, [start_date, end_date], (err, rows) => {
@@ -183,12 +187,12 @@ app.delete('/api/tasks/:id', (req, res) => {
   });
 });
 
-// POST /api/tasks/:id/validate - Valider ou invalider une tâche pour une date
+// POST /api/tasks/:id/validate - Valider une tâche pour une date avec statut et note
 app.post('/api/tasks/:id/validate', (req, res) => {
   const { id } = req.params;
-  const { date, completed } = req.body;
+  const { date, status, note } = req.body;
   
-  if (!date || completed === undefined) {
+  if (!date || status === undefined) {
     res.status(400).json({ error: 'La date et le statut sont requis' });
     return;
   }
@@ -207,11 +211,11 @@ app.post('/api/tasks/:id/validate', (req, res) => {
 
     // Insérer ou mettre à jour la validation
     const query = `
-      INSERT OR REPLACE INTO daily_validations (task_id, date, completed) 
-      VALUES (?, ?, ?)
+      INSERT OR REPLACE INTO daily_validations (task_id, date, status, note) 
+      VALUES (?, ?, ?, ?)
     `;
     
-    db.run(query, [id, date, completed ? 1 : 0], function(err) {
+    db.run(query, [id, date, status, note || null], function(err) {
       if (err) {
         res.status(500).json({ error: err.message });
         return;
@@ -221,7 +225,8 @@ app.post('/api/tasks/:id/validate', (req, res) => {
         message: 'Validation mise à jour avec succès',
         task_id: id,
         date: date,
-        completed: completed
+        status: status,
+        note: note
       });
     });
   });

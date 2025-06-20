@@ -56,6 +56,17 @@ body {
     flex-wrap: wrap;
 }
 
+.week-display {
+    font-weight: 600;
+    color: #4a5568;
+    padding: 8px 12px;
+    background: #f7fafc;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+    min-width: 200px;
+    text-align: center;
+}
+
 .date-input {
     padding: 10px 15px;
     border: 2px solid #e2e8f0;
@@ -262,8 +273,14 @@ body {
     border-color: #68d391;
 }
 
-.task-item.completed .task-title {
-    color: #68d391;
+.task-item.partial {
+    background: #fffbeb;
+    border-color: #f6ad55;
+}
+
+.task-item.not-done {
+    background: #fed7d7;
+    border-color: #f56565;
 }
 
 .task-header {
@@ -285,30 +302,31 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    font-weight: bold;
 }
 
-.task-checkbox.checked {
+.task-checkbox.completed {
     background: #48bb78;
     border-color: #48bb78;
+    color: white;
 }
 
-.task-checkbox.checked::after {
-    content: '✓';
+.task-checkbox.partial {
+    background: #ed8936;
+    border-color: #ed8936;
     color: white;
-    font-size: 14px;
-    font-weight: bold;
 }
 
 .task-checkbox.not-done {
-    background: #fed7d7;
+    background: #f56565;
     border-color: #f56565;
+    color: white;
 }
 
-.task-checkbox.not-done::after {
-    content: '✗';
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
+.task-checkbox.empty {
+    background: white;
+    border-color: #cbd5e0;
+    color: #a0aec0;
 }
 
 .task-title {
@@ -322,6 +340,18 @@ body {
     color: #718096;
     margin-left: 39px;
     line-height: 1.5;
+}
+
+.task-note {
+    color: #e53e3e;
+    margin-left: 39px;
+    line-height: 1.5;
+    font-style: italic;
+    font-size: 0.9rem;
+    background: #fed7d7;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-top: 8px;
 }
 
 .task-actions {
@@ -419,6 +449,22 @@ body {
 .history-header h2 {
     color: #4a5568;
     font-size: 1.5rem;
+    margin-bottom: 15px;
+}
+
+.status-legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #4a5568;
 }
 
 .history-table {
@@ -483,6 +529,11 @@ body {
     color: white;
 }
 
+.status-indicator.partial {
+    background: #ed8936;
+    color: white;
+}
+
 .status-indicator.not-done {
     background: #f56565;
     color: white;
@@ -491,6 +542,84 @@ body {
 .status-indicator.empty {
     background: #e2e8f0;
     color: #a0aec0;
+}
+
+/* Modal de validation */
+.validation-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.validation-status {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.validation-status label {
+    font-weight: 600;
+    color: #4a5568;
+}
+
+.status-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.status-btn {
+    flex: 1;
+    min-width: 120px;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.status-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.status-btn.completed {
+    border-color: #48bb78;
+    color: #48bb78;
+}
+
+.status-btn.completed:hover,
+.status-btn.completed.active {
+    background: #48bb78;
+    color: white;
+}
+
+.status-btn.partial {
+    border-color: #ed8936;
+    color: #ed8936;
+}
+
+.status-btn.partial:hover,
+.status-btn.partial.active {
+    background: #ed8936;
+    color: white;
+}
+
+.status-btn.not-done {
+    border-color: #f56565;
+    color: #f56565;
+}
+
+.status-btn.not-done:hover,
+.status-btn.not-done.active {
+    background: #f56565;
+    color: white;
 }
 
 /* Modal */
@@ -604,6 +733,20 @@ body {
     .history-table th,
     .history-table td {
         padding: 8px 10px;
+    }
+    
+    .status-legend {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .status-buttons {
+        flex-direction: column;
+    }
+    
+    .status-btn {
+        min-width: auto;
     }
     
     .modal-content {
