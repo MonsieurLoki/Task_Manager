@@ -1,13 +1,14 @@
-# Gestionnaire de Tâches
+# Gestionnaire de Tâches Quotidiennes
 
-Une application web moderne et responsive pour gérer vos tâches quotidiennes. Parfaite pour une utilisation sur PC et téléphone.
+Une application web moderne et responsive pour gérer vos tâches quotidiennes récurrentes. Parfaite pour une utilisation sur PC et téléphone, elle vous permet de valider rapidement vos habitudes quotidiennes et de suivre votre progression dans le temps.
 
 ## 🚀 Fonctionnalités
 
-- ✅ **Interface responsive** : Fonctionne parfaitement sur PC et mobile
-- 📅 **Navigation par date** : Consultez vos tâches pour n'importe quel jour
-- ✏️ **Gestion complète** : Ajoutez, modifiez, supprimez et validez vos tâches
-- 📊 **Statistiques** : Suivez votre progression quotidienne
+- ✅ **Tâches récurrentes** : Définissez vos tâches quotidiennes une seule fois
+- 📅 **Validation rapide** : Validez ou invalidez vos tâches en un clic
+- 📊 **Vue historique** : Consultez votre progression sur n'importe quelle période
+- 🎯 **Indicateurs visuels** : ✓ vert pour validé, ✗ rouge pour non fait
+- 📱 **Interface responsive** : Fonctionne parfaitement sur PC et mobile
 - 💾 **Persistance** : Vos données sont sauvegardées localement
 - 🎨 **Interface moderne** : Design épuré et intuitif
 
@@ -40,26 +41,33 @@ Une application web moderne et responsive pour gérer vos tâches quotidiennes. 
 
 ## 📱 Utilisation
 
-### Sur PC
-- L'interface s'adapte automatiquement à la taille de votre écran
-- Utilisez la souris pour toutes les interactions
-- Navigation au clavier supportée (Echap pour fermer les modales)
+### Vue Quotidienne
+- **Ajouter une tâche récurrente** : Définissez vos tâches quotidiennes (ex: "Faire du sport", "Lire 30 min")
+- **Validation rapide** : Cliquez sur la case à cocher pour valider/invalider une tâche
+- **Navigation par date** : Consultez vos validations pour n'importe quel jour
+- **Statistiques** : Suivez votre progression quotidienne
 
-### Sur Mobile
-- L'application est optimisée pour les écrans tactiles
-- Interface adaptée aux gestes mobiles
-- Navigation intuitive avec les boutons de date
+### Vue Historique
+- **Sélection de période** : Choisissez une période pour voir votre historique
+- **Tableau de progression** : Visualisez toutes vos validations dans un tableau
+- **Indicateurs visuels** :
+  - ✓ vert : Tâche validée
+  - ✗ rouge : Tâche non faite
+  - - gris : Pas de validation pour cette date
 
 ### Fonctionnalités principales
 
-1. **Ajouter une tâche**
+1. **Ajouter une tâche récurrente**
    - Remplissez le titre (obligatoire)
    - Ajoutez une description (optionnelle)
-   - Cliquez sur "Ajouter une tâche"
+   - Cliquez sur "Ajouter la tâche"
+   - La tâche apparaîtra pour tous les jours
 
 2. **Valider une tâche**
    - Cliquez sur la case à cocher à gauche du titre
-   - La tâche sera marquée comme complétée
+   - ✓ vert apparaît pour les tâches validées
+   - ✗ rouge apparaît pour les tâches non faites
+   - Cliquez à nouveau pour changer le statut
 
 3. **Modifier une tâche**
    - Cliquez sur l'icône crayon (✏️)
@@ -69,25 +77,41 @@ Une application web moderne et responsive pour gérer vos tâches quotidiennes. 
 4. **Supprimer une tâche**
    - Cliquez sur l'icône poubelle (🗑️)
    - Confirmez la suppression
+   - Toutes les validations associées seront supprimées
 
 5. **Naviguer entre les dates**
    - Utilisez les flèches gauche/droite
    - Sélectionnez une date directement
    - Cliquez sur "Aujourd'hui" pour revenir à la date actuelle
 
+6. **Consulter l'historique**
+   - Basculez vers la "Vue Historique"
+   - Sélectionnez une période
+   - Cliquez sur "Charger" pour voir votre progression
+
 ## 🗄️ Base de données
 
-L'application utilise SQLite pour stocker les données localement. Le fichier `tasks.db` sera créé automatiquement lors du premier démarrage.
+L'application utilise SQLite avec deux tables principales :
 
 ### Structure de la base de données
 ```sql
-CREATE TABLE tasks (
+-- Table des tâches récurrentes
+CREATE TABLE recurring_tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     description TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table des validations quotidiennes
+CREATE TABLE daily_validations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
     date TEXT NOT NULL,
     completed BOOLEAN DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES recurring_tasks (id),
+    UNIQUE(task_id, date)
 );
 ```
 
@@ -103,7 +127,6 @@ Vous pouvez modifier les styles dans `public/styles.css` pour adapter l'apparenc
 
 - `npm start` : Démarre l'application en mode production
 - `npm run dev` : Démarre l'application en mode développement avec rechargement automatique
-- `npm run init-db` : Initialise la base de données (optionnel)
 
 ## 🌐 Déploiement
 
@@ -120,6 +143,22 @@ L'application peut être déployée sur des plateformes comme :
 - Vercel
 - Netlify
 - Railway
+
+## 🎯 Cas d'usage
+
+### Exemples de tâches quotidiennes
+- **Sport** : "Faire 30 min d'exercice"
+- **Lecture** : "Lire 20 pages"
+- **Hydratation** : "Boire 2L d'eau"
+- **Méditation** : "Méditer 10 min"
+- **Apprentissage** : "Pratiquer l'anglais 15 min"
+- **Organisation** : "Ranger mon bureau"
+
+### Workflow quotidien
+1. **Le matin** : Consultez vos tâches du jour
+2. **Pendant la journée** : Validez vos tâches au fur et à mesure
+3. **Le soir** : Faites un point sur votre journée
+4. **En fin de semaine** : Consultez l'historique pour voir votre progression
 
 ## 🔒 Sécurité
 

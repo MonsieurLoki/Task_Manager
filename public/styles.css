@@ -41,6 +41,14 @@ body {
     color: #667eea;
 }
 
+.header-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
 .date-selector {
     display: flex;
     align-items: center;
@@ -59,6 +67,22 @@ body {
 
 .date-input:focus {
     outline: none;
+    border-color: #667eea;
+}
+
+.view-toggle {
+    display: flex;
+    gap: 5px;
+}
+
+.view-toggle .btn-secondary {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+}
+
+.view-toggle .btn-secondary.active {
+    background: #667eea;
+    color: white;
     border-color: #667eea;
 }
 
@@ -112,13 +136,19 @@ body {
 
 /* Main content */
 .main-content {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.view-container {
     display: grid;
     gap: 30px;
     grid-template-columns: 1fr 2fr;
 }
 
 @media (max-width: 768px) {
-    .main-content {
+    .view-container {
         grid-template-columns: 1fr;
     }
 }
@@ -131,6 +161,14 @@ body {
     padding: 25px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     height: fit-content;
+}
+
+.task-form-container h3 {
+    color: #4a5568;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .task-form {
@@ -225,7 +263,6 @@ body {
 }
 
 .task-item.completed .task-title {
-    text-decoration: line-through;
     color: #68d391;
 }
 
@@ -237,29 +274,40 @@ body {
 }
 
 .task-checkbox {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border: 2px solid #cbd5e0;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
     background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .task-checkbox.checked {
-    background: #667eea;
-    border-color: #667eea;
+    background: #48bb78;
+    border-color: #48bb78;
 }
 
 .task-checkbox.checked::after {
     content: '✓';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     color: white;
-    font-size: 12px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.task-checkbox.not-done {
+    background: #fed7d7;
+    border-color: #f56565;
+}
+
+.task-checkbox.not-done::after {
+    content: '✗';
+    color: white;
+    font-size: 14px;
     font-weight: bold;
 }
 
@@ -272,7 +320,7 @@ body {
 
 .task-description {
     color: #718096;
-    margin-left: 35px;
+    margin-left: 39px;
     line-height: 1.5;
 }
 
@@ -331,6 +379,117 @@ body {
 
 .no-tasks p:last-child {
     font-size: 0.9rem;
+    color: #a0aec0;
+}
+
+/* Vue Historique */
+.history-controls {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    height: fit-content;
+}
+
+.period-selector {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.period-selector label {
+    font-weight: 600;
+    color: #4a5568;
+}
+
+.history-container {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.history-header {
+    margin-bottom: 20px;
+}
+
+.history-header h2 {
+    color: #4a5568;
+    font-size: 1.5rem;
+}
+
+.history-table {
+    overflow-x: auto;
+}
+
+.history-table table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.history-table th,
+.history-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.history-table th {
+    background: #f7fafc;
+    font-weight: 600;
+    color: #4a5568;
+    position: sticky;
+    top: 0;
+}
+
+.history-table tr:hover {
+    background: #f7fafc;
+}
+
+.history-table .task-name {
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.history-table .date-cell {
+    font-weight: 500;
+    color: #4a5568;
+}
+
+.history-table .status-cell {
+    text-align: center;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.status-indicator.completed {
+    background: #48bb78;
+    color: white;
+}
+
+.status-indicator.not-done {
+    background: #f56565;
+    color: white;
+}
+
+.status-indicator.empty {
+    background: #e2e8f0;
     color: #a0aec0;
 }
 
@@ -397,12 +556,23 @@ body {
         font-size: 1.5rem;
     }
     
+    .header-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
     .date-selector {
         justify-content: center;
     }
     
+    .view-toggle {
+        justify-content: center;
+    }
+    
     .task-form-container,
-    .tasks-container {
+    .tasks-container,
+    .history-controls,
+    .history-container {
         padding: 20px;
     }
     
@@ -420,6 +590,20 @@ body {
         opacity: 1;
         margin-top: 10px;
         justify-content: flex-end;
+    }
+    
+    .period-selector {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .history-table {
+        font-size: 0.9rem;
+    }
+    
+    .history-table th,
+    .history-table td {
+        padding: 8px 10px;
     }
     
     .modal-content {

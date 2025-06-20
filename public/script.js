@@ -1,13 +1,15 @@
-class TaskManager {
+class DailyTaskManager {
     constructor() {
         this.currentDate = new Date().toISOString().split('T')[0];
         this.tasks = [];
         this.editingTaskId = null;
+        this.currentView = 'daily'; // 'daily' ou 'history'
         
         this.initializeElements();
         this.bindEvents();
         this.loadTasks();
         this.updateDateDisplay();
+        this.initializeHistoryDates();
     }
 
     initializeElements() {
@@ -17,6 +19,12 @@ class TaskManager {
         this.nextDateBtn = document.getElementById('nextDate');
         this.todayBtn = document.getElementById('todayBtn');
         this.currentDateDisplay = document.getElementById('currentDateDisplay');
+
+        // Boutons de vue
+        this.dailyViewBtn = document.getElementById('dailyViewBtn');
+        this.historyViewBtn = document.getElementById('historyViewBtn');
+        this.dailyView = document.getElementById('dailyView');
+        this.historyView = document.getElementById('historyView');
 
         // Formulaire
         this.taskForm = document.getElementById('taskForm');
@@ -28,6 +36,13 @@ class TaskManager {
         this.noTasksDiv = document.getElementById('noTasks');
         this.completedCountSpan = document.getElementById('completedCount');
         this.totalCountSpan = document.getElementById('totalCount');
+
+        // Vue historique
+        this.historyStartDate = document.getElementById('historyStartDate');
+        this.historyEndDate = document.getElementById('historyEndDate');
+        this.loadHistoryBtn = document.getElementById('loadHistoryBtn');
+        this.historyTable = document.getElementById('historyTable');
+        this.noHistoryDiv = document.getElementById('noHistory');
 
         // Modal d'édition
         this.editModal = document.getElementById('editModal');
@@ -52,8 +67,15 @@ class TaskManager {
             this.updateDateDisplay();
         });
 
+        // Changement de vue
+        this.dailyViewBtn.addEventListener('click', () => this.switchView('daily'));
+        this.historyViewBtn.addEventListener('click', () => this.switchView('history'));
+
         // Formulaire d'ajout
         this.taskForm.addEventListener('submit', (e) => this.handleAddTask(e));
+
+        // Vue historique
+        this.loadHistoryBtn.addEventListener('click', () => this.loadHistory());
 
         // Modal d'édition
         this.closeModalBtn.addEventListener('click', () => this.closeModal());
@@ -75,6 +97,31 @@ class TaskManager {
         });
     }
 
+    switchView(view) {
+        this.currentView = view;
+        
+        // Mettre à jour les boutons
+        this.dailyViewBtn.classList.toggle('active', view === 'daily');
+        this.historyViewBtn.classList.toggle('active', view === 'history');
+        
+        // Afficher/masquer les vues
+        this.dailyView.style.display = view === 'daily' ? 'grid' : 'none';
+        this.historyView.style.display = view === 'history' ? 'grid' : 'none';
+        
+        if (view === 'history') {
+            this.loadHistory();
+        }
+    }
+
+    initializeHistoryDates() {
+        const today = new Date();
+        const lastWeek = new Date(today);
+        lastWeek.setDate(today.getDate() - 7);
+        
+        this.historyStartDate.value = lastWeek.toISOString().split('T')[0];
+        this.historyEndDate.value = today.toISOString().split('T')[0];
+    }
+
     async loadTasks() {
         try {
             const response = await fetch(`/api/tasks?date=${this.currentDate}`);
@@ -87,6 +134,110 @@ class TaskManager {
             console.error('Erreur:', error);
             this.showNotification('Erreur lors du chargement des tâches', 'error');
         }
+    }
+
+    async loadHistory() {
+        const startDate = this.historyStartDate.value;
+        const endDate = this.historyEndDate.value;
+        
+        if (!startDate || !endDate) {
+            this.showNotification('Veuillez sélectionner une période', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/tasks/history?start_date=${startDate}&end_date=${endDate}`);
+            if (!response.ok) throw new Error('Erreur lors du chargement de l\'historique');
+            
+            const historyData = await response.json();
+            this.renderHistory(historyData, startDate, endDate);
+        } catch (error) {
+            console.error('Erreur:', error);
+            this.showNotification('Erreur lors du chargement de l\'historique', 'error');
+        }
+    }
+
+    renderHistory(historyData, startDate, endDate) {
+        if (historyData.length === 0) {
+            this.historyTable.style.display = 'none';
+            this.noHistoryDiv.style.display = 'block';
+            return;
+        }
+
+        this.historyTable.style.display = 'block';
+        this.noHistoryDiv.style.display = 'none';
+
+        // Grouper les données par tâche
+        const tasksMap = new Map();
+        historyData.forEach(item => {
+            if (!tasksMap.has(item.id)) {
+                tasksMap.set(item.id, {
+                    id: item.id,
+                    title: item.title,
+                    validations: []
+                });
+            }
+            if (item.date) {
+                tasksMap.get(item.id).validations.push({
+                    date: item.date,
+                    completed: item.completed
+                });
+            }
+        });
+
+        // Générer les dates de la période
+        const dates = this.generateDateRange(startDate, endDate);
+        
+        // Créer le tableau HTML
+        let tableHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tâche</th>
+                        ${dates.map(date => `<th>${this.formatDateForTable(date)}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        tasksMap.forEach(task => {
+            tableHTML += `<tr>
+                <td class="task-name">${this.escapeHtml(task.title)}</td>
+                ${dates.map(date => {
+                    const validation = task.validations.find(v => v.date === date);
+                    if (!validation) {
+                        return '<td class="status-cell"><span class="status-indicator empty">-</span></td>';
+                    }
+                    const statusClass = validation.completed ? 'completed' : 'not-done';
+                    const statusText = validation.completed ? '✓' : '✗';
+                    return `<td class="status-cell"><span class="status-indicator ${statusClass}">${statusText}</span></td>`;
+                }).join('')}
+            </tr>`;
+        });
+
+        tableHTML += '</tbody></table>';
+        this.historyTable.innerHTML = tableHTML;
+    }
+
+    generateDateRange(startDate, endDate) {
+        const dates = [];
+        const current = new Date(startDate);
+        const end = new Date(endDate);
+        
+        while (current <= end) {
+            dates.push(current.toISOString().split('T')[0]);
+            current.setDate(current.getDate() + 1);
+        }
+        
+        return dates;
+    }
+
+    formatDateForTable(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('fr-FR', { 
+            day: '2-digit', 
+            month: '2-digit' 
+        });
     }
 
     async handleAddTask(e) {
@@ -105,21 +256,20 @@ class TaskManager {
                 },
                 body: JSON.stringify({
                     title,
-                    description,
-                    date: this.currentDate
+                    description
                 })
             });
 
             if (!response.ok) throw new Error('Erreur lors de l\'ajout de la tâche');
             
             const newTask = await response.json();
-            this.tasks.unshift(newTask);
+            this.tasks.push(newTask);
             this.renderTasks();
             this.updateStats();
             
             // Réinitialiser le formulaire
             this.taskForm.reset();
-            this.showNotification('Tâche ajoutée avec succès', 'success');
+            this.showNotification('Tâche récurrente ajoutée avec succès', 'success');
         } catch (error) {
             console.error('Erreur:', error);
             this.showNotification('Erreur lors de l\'ajout de la tâche', 'error');
@@ -142,9 +292,7 @@ class TaskManager {
                 },
                 body: JSON.stringify({
                     title,
-                    description,
-                    date: this.currentDate,
-                    completed: this.tasks.find(t => t.id === this.editingTaskId)?.completed || false
+                    description
                 })
             });
 
@@ -153,9 +301,8 @@ class TaskManager {
             const updatedTask = await response.json();
             const index = this.tasks.findIndex(t => t.id === this.editingTaskId);
             if (index !== -1) {
-                this.tasks[index] = updatedTask;
+                this.tasks[index] = { ...this.tasks[index], title: updatedTask.title, description: updatedTask.description };
                 this.renderTasks();
-                this.updateStats();
             }
             
             this.closeModal();
@@ -166,41 +313,41 @@ class TaskManager {
         }
     }
 
-    async toggleTaskComplete(taskId) {
+    async toggleTaskValidation(taskId) {
         const task = this.tasks.find(t => t.id === taskId);
         if (!task) return;
 
+        const newStatus = !task.completed;
+
         try {
-            const response = await fetch(`/api/tasks/${taskId}`, {
-                method: 'PUT',
+            const response = await fetch(`/api/tasks/${taskId}/validate`, {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    title: task.title,
-                    description: task.description,
-                    date: task.date,
-                    completed: !task.completed
+                    date: this.currentDate,
+                    completed: newStatus
                 })
             });
 
-            if (!response.ok) throw new Error('Erreur lors de la modification de la tâche');
+            if (!response.ok) throw new Error('Erreur lors de la validation de la tâche');
             
-            const updatedTask = await response.json();
-            const index = this.tasks.findIndex(t => t.id === taskId);
-            if (index !== -1) {
-                this.tasks[index] = updatedTask;
-                this.renderTasks();
-                this.updateStats();
-            }
+            // Mettre à jour localement
+            task.completed = newStatus;
+            this.renderTasks();
+            this.updateStats();
+            
+            const statusText = newStatus ? 'validée' : 'invalidée';
+            this.showNotification(`Tâche ${statusText} avec succès`, 'success');
         } catch (error) {
             console.error('Erreur:', error);
-            this.showNotification('Erreur lors de la modification de la tâche', 'error');
+            this.showNotification('Erreur lors de la validation de la tâche', 'error');
         }
     }
 
     async deleteTask(taskId) {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return;
+        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche récurrente ? Toutes les validations seront également supprimées.')) return;
 
         try {
             const response = await fetch(`/api/tasks/${taskId}`, {
@@ -249,8 +396,10 @@ class TaskManager {
         this.tasksList.innerHTML = this.tasks.map(task => `
             <div class="task-item ${task.completed ? 'completed' : ''}" data-id="${task.id}">
                 <div class="task-header">
-                    <div class="task-checkbox ${task.completed ? 'checked' : ''}" 
-                         onclick="taskManager.toggleTaskComplete(${task.id})"></div>
+                    <div class="task-checkbox ${task.completed ? 'checked' : 'not-done'}" 
+                         onclick="taskManager.toggleTaskValidation(${task.id})" 
+                         title="${task.completed ? 'Cliquer pour invalider' : 'Cliquer pour valider'}">
+                    </div>
                     <div class="task-title">${this.escapeHtml(task.title)}</div>
                 </div>
                 ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
@@ -371,5 +520,5 @@ document.head.appendChild(style);
 // Initialiser l'application
 let taskManager;
 document.addEventListener('DOMContentLoaded', () => {
-    taskManager = new TaskManager();
+    taskManager = new DailyTaskManager();
 }); 
