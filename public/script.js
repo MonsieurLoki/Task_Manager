@@ -7,11 +7,58 @@ class TaskManager {
         this.selectedStatus = null;
         this.currentView = 'daily';
         
+        this.initializeTheme();
         this.initializeElements();
         this.bindEvents();
         this.initializeTasks();
         this.updateWeekDisplay();
         this.initializeHistoryDates();
+    }
+
+    // Gestion du thème
+    initializeTheme() {
+        this.themeToggle = document.getElementById('themeToggle');
+        
+        // Récupère le thème sauvegardé ou utilise la préférence système
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        if (savedTheme) {
+            this.setTheme(savedTheme);
+        } else if (prefersDark) {
+            this.setTheme('dark');
+        } else {
+            this.setTheme('light');
+        }
+        
+        // Écoute les changements de préférence système
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('theme')) {
+                this.setTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+    }
+
+    setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        
+        // Met à jour l'état du toggle
+        if (this.themeToggle) {
+            this.themeToggle.setAttribute('aria-pressed', theme === 'dark');
+        }
+    }
+
+    toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        this.setTheme(newTheme);
+        
+        // Animation du toggle
+        this.themeToggle.classList.add('toggling');
+        setTimeout(() => {
+            this.themeToggle.classList.remove('toggling');
+        }, 300);
     }
 
     initializeElements() {
@@ -80,6 +127,9 @@ class TaskManager {
     }
 
     bindEvents() {
+        // Toggle de thème
+        this.themeToggle.addEventListener('click', () => this.toggleTheme());
+        
         // Navigation par semaine
         this.prevWeekBtn.addEventListener('click', () => this.changeWeek(-1));
         this.nextWeekBtn.addEventListener('click', () => this.changeWeek(1));
