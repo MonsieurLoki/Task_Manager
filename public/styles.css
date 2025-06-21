@@ -133,6 +133,15 @@ body {
     border-color: #cbd5e0;
 }
 
+.btn-danger {
+    background: #e53e3e;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c53030;
+}
+
 .btn-icon {
     padding: 10px;
     background: #f7fafc;
@@ -949,4 +958,46 @@ body {
 .heatmap-cell.legend-cell {
     width: 16px;
     height: 16px;
+}
+
+/* Vue Statistiques */
+#statsView {
+    display: none; /* Caché par défaut */
+    flex-direction: column;
+    gap: 20px;
+}
+
+.stats-header {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.stats-header h2 {
+    color: #4a5568;
+    font-size: 1.5rem;
+}
+
+.stats-grid {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    min-height: 380px;
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+}
+
+.stat-card h3 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #4a5568;
 } 

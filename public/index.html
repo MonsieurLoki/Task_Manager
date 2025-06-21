@@ -22,6 +22,7 @@
                     <button id="dailyViewBtn" class="btn-secondary active">Vue Quotidienne</button>
                     <button id="historyViewBtn" class="btn-secondary">Vue Historique</button>
                     <button id="heatmapViewBtn" class="btn-secondary">Vue Calendrier</button>
+                    <button id="statsViewBtn" class="btn-secondary">Statistiques</button>
                 </div>
                 <div class="focus-mode-toggle">
                     <label for="focusMode" class="focus-label">Mode Focus</label>
@@ -146,6 +147,24 @@
                     <p>Aucune tâche complétée pour cette année.</p>
                 </div>
             </div>
+
+            <!-- Vue Statistiques -->
+            <div id="statsView" class="view-container" style="display: none;">
+                <div class="stats-header">
+                    <h2>Statistiques et Tendances</h2>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Taux de réussite par tâche</h3>
+                        <canvas id="taskSuccessChart"></canvas>
+                    </div>
+                </div>
+                 <div id="noStatsData" class="no-tasks" style="display: none;">
+                    <i class="fas fa-chart-pie"></i>
+                    <p>Données insuffisantes pour générer des statistiques.</p>
+                    <p>Commencez par valider quelques tâches !</p>
+                </div>
+            </div>
         </main>
 
         <!-- Modal pour éditer une tâche -->
@@ -202,6 +221,9 @@
                         <textarea id="validationNote" placeholder="Expliquez pourquoi la tâche n'est pas faite ou partiellement faite..."></textarea>
                     </div>
                     <div class="form-actions">
+                        <button type="button" id="deleteValidationBtn" class="btn-danger" style="display: none;">
+                            <i class="fas fa-trash-alt"></i> Retirer
+                        </button>
                         <button type="button" id="cancelValidation" class="btn-secondary">Annuler</button>
                         <button type="submit" class="btn-primary">Valider</button>
                     </div>
@@ -210,6 +232,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="script.js"></script>
 </body>
 </html> 

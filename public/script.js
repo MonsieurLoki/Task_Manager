@@ -9,7 +9,7 @@ class TaskManager {
         
         this.initializeElements();
         this.bindEvents();
-        this.loadTasks(); // Charge les tâches de la semaine initiale
+        this.initializeTasks();
         this.updateWeekDisplay();
         this.initializeHistoryDates();
     }
@@ -61,6 +61,7 @@ class TaskManager {
         this.validationNote = document.getElementById('validationNote');
         this.closeValidationModalBtn = document.getElementById('closeValidationModal');
         this.cancelValidation = document.getElementById('cancelValidation');
+        this.deleteValidationBtn = document.getElementById('deleteValidationBtn');
         this.statusButtons = document.querySelectorAll('.status-btn');
         this.focusModeToggle = document.getElementById('focusMode');
 
@@ -70,6 +71,12 @@ class TaskManager {
         this.heatmapYearSelect = document.getElementById('heatmapYear');
         this.heatmapGrid = document.getElementById('heatmapGrid');
         this.noHeatmapData = document.getElementById('noHeatmapData');
+
+        // Vue Statistiques
+        this.statsViewBtn = document.getElementById('statsViewBtn');
+        this.statsView = document.getElementById('statsView');
+        this.noStatsData = document.getElementById('noStatsData');
+        this.taskSuccessChart = null;
     }
 
     bindEvents() {
@@ -82,6 +89,7 @@ class TaskManager {
         this.dailyViewBtn.addEventListener('click', () => this.switchView('daily'));
         this.historyViewBtn.addEventListener('click', () => this.switchView('history'));
         this.heatmapViewBtn.addEventListener('click', () => this.switchView('heatmap'));
+        this.statsViewBtn.addEventListener('click', () => this.switchView('stats'));
         this.focusModeToggle.addEventListener('change', () => this.renderTasks());
         this.heatmapYearSelect.addEventListener('change', () => this.loadHeatmapData());
 
@@ -101,6 +109,7 @@ class TaskManager {
         // Modal de validation
         this.closeValidationModalBtn.addEventListener('click', () => this.closeValidationModal());
         this.cancelValidation.addEventListener('click', () => this.closeValidationModal());
+        this.deleteValidationBtn.addEventListener('click', () => this.handleDeleteValidation());
         this.validationForm.addEventListener('submit', (e) => this.handleValidation(e));
 
         // Boutons de statut
@@ -153,15 +162,19 @@ class TaskManager {
         this.dailyViewBtn.classList.toggle('active', view === 'daily');
         this.historyViewBtn.classList.toggle('active', view === 'history');
         this.heatmapViewBtn.classList.toggle('active', view === 'heatmap');
+        this.statsViewBtn.classList.toggle('active', view === 'stats');
         
         this.dailyView.style.display = view === 'daily' ? 'grid' : 'none';
         this.historyView.style.display = view === 'history' ? 'grid' : 'none';
         this.heatmapView.style.display = view === 'heatmap' ? 'block' : 'none';
+        this.statsView.style.display = view === 'stats' ? 'flex' : 'none';
         
         if (view === 'history') {
             this.loadHistory();
         } else if (view === 'heatmap') {
             this.initializeHeatmap();
+        } else if (view === 'stats') {
+            this.loadAndRenderStatistics();
         }
     }
 
@@ -204,150 +217,161 @@ class TaskManager {
         }
     }
 
-    async loadTasks() {
+    async initializeTasks() {
         try {
-            const weekEnd = this.getWeekEnd(this.currentWeekStart);
-            const response = await fetch(`/api/tasks/history?start_date=${this.currentWeekStart.toISOString().split('T')[0]}&end_date=${weekEnd.toISOString().split('T')[0]}`);
+            // 1. Charger toutes les tâches de base
+            const tasksResponse = await fetch('/api/tasks');
+            if (!tasksResponse.ok) throw new Error('Impossible de charger les tâches de base');
+            const tasks = await tasksResponse.json();
+
+            this.tasksMap.clear();
+            tasks.forEach(task => {
+                this.tasksMap.set(task.id, { ...task, validations: {} });
+            });
+
+            // 2. Charger les validations pour la semaine initiale
+            await this.loadValidationsForCurrentWeek();
             
-            if (!response.ok) throw new Error('Erreur lors du chargement des tâches');
-            
-            const weekData = await response.json();
-            this.mergeTaskData(weekData); // Fusionne les nouvelles données
+            // 3. Afficher le résultat
             this.renderTasks();
             this.updateStats();
+
         } catch (error) {
-            console.error('Erreur:', error);
-            this.showNotification('Erreur lors du chargement des tâches', 'error');
+            console.error('Erreur initialisation:', error);
+            this.showNotification("Erreur critique au chargement de l'application", 'error');
         }
     }
 
-    // NOUVELLE FONCTION pour fusionner les données sans écraser l'historique
-    mergeTaskData(taskData) {
-        taskData.forEach(item => {
-            const task = this.tasksMap.get(item.id) || {
-                id: item.id,
-                validations: {}
-            };
+    async loadValidationsForCurrentWeek() {
+        try {
+            const weekEnd = this.getWeekEnd(this.currentWeekStart);
+            const response = await fetch(`/api/validations/range?start_date=${this.currentWeekStart.toISOString().split('T')[0]}&end_date=${weekEnd.toISOString().split('T')[0]}`);
+            
+            if (!response.ok) throw new Error('Erreur lors du chargement des validations');
+            
+            const validations = await response.json();
+            this.mergeValidationData(validations);
+        } catch (error) {
+            console.error('Erreur chargement validations:', error);
+            this.showNotification('Erreur lors du chargement des données de la semaine', 'error');
+        }
+    }
 
-            task.name = item.name;
-            task.target_frequency = item.target_frequency;
-            task.description = item.description;
-            task.created_at = item.created_at;
+    mergeValidationData(validations) {
+        // D'abord, on réinitialise les validations pour la semaine en cours pour éviter les doublons
+        for (const task of this.tasksMap.values()) {
+            // Logique un peu plus complexe pour ne pas effacer tout l'historique chargé
+            // mais seulement la semaine en cours. Pour l'instant on garde simple.
+        }
 
-            if (item.date) {
-                task.validations[item.date] = {
-                    status: item.status,
-                    note: item.note
+        validations.forEach(validation => {
+            const task = this.tasksMap.get(validation.task_id);
+            if (task) {
+                task.validations[validation.date] = {
+                    status: validation.status,
+                    note: validation.note
                 };
             }
-            
-            this.tasksMap.set(item.id, task);
         });
     }
 
     async loadHistory() {
         const startDate = this.historyStartDate.value;
         const endDate = this.historyEndDate.value;
-        
-        if (!startDate || !endDate) return;
+        if (!startDate || !endDate) {
+            this.showNotification('Veuillez sélectionner une période valide.', 'error');
+            return;
+        }
 
         try {
-            const response = await fetch(`/api/tasks/history?start_date=${startDate}&end_date=${endDate}`);
-            if (!response.ok) throw new Error('Erreur lors du chargement de l\'historique');
-            
-            const historyData = await response.json();
-            this.mergeTaskData(historyData); // Fusionne aussi pour la vue historique
-            this.renderHistory(historyData, startDate, endDate);
+            const response = await fetch(`/api/validations/range?start_date=${startDate}&end_date=${endDate}`);
+            if (!response.ok) {
+                throw new Error('Erreur lors du chargement de l\'historique');
+            }
+            const validations = await response.json();
+            this.mergeValidationData(validations);
+            this.renderHistory(startDate, endDate);
+
         } catch (error) {
-            console.error('Erreur:', error);
+            console.error(error);
             this.showNotification('Erreur lors du chargement de l\'historique', 'error');
+            this.historyTable.innerHTML = '';
+            this.noHistoryDiv.style.display = 'block';
         }
     }
 
-    renderHistory(historyData, startDate, endDate) {
-        if (historyData.length === 0) {
-            this.historyTable.style.display = 'none';
+    renderHistory(startDateStr, endDateStr) {
+        const tasks = Array.from(this.tasksMap.values());
+        if (tasks.length === 0) {
+            this.historyTable.innerHTML = '';
             this.noHistoryDiv.style.display = 'block';
             return;
         }
 
-        this.historyTable.style.display = 'block';
-        this.noHistoryDiv.style.display = 'none';
-
-        const tasksToRender = new Map();
-        historyData.forEach(item => {
-            if (!tasksToRender.has(item.id)) {
-                tasksToRender.set(item.id, {
-                    id: item.id,
-                    name: item.name,
-                    target_frequency: item.target_frequency,
-                    validations: []
-                });
-            }
-            if (item.date) {
-                const globalTask = this.tasksMap.get(item.id);
-                if (globalTask) {
-                    tasksToRender.get(item.id).validations = Object.entries(globalTask.validations).map(([date, val]) => ({ date, ...val }));
-                }
-            }
-        });
-        
+        const startDate = new Date(startDateStr);
+        const endDate = new Date(endDateStr);
+        const dateRange = this.generateDateRange(startDate, endDate);
         const todayStr = new Date().toISOString().split('T')[0];
-        const dates = this.generateDateRange(startDate, endDate);
-        
-        let tableHTML = `
+
+        let tableHtml = `
             <table>
                 <thead>
                     <tr>
                         <th>Tâche</th>
-                        ${dates.map(date => {
-                            const isCurrentDay = date === todayStr;
-                            return `<th class="${isCurrentDay ? 'current-day-header' : ''}">${this.formatDateForTable(date)}</th>`;
-                        }).join('')}
-                        <th>Objectif %</th>
+                        ${dateRange.map(date => `<th class="date-cell ${date === todayStr ? 'current-day-header' : ''}">${this.formatDateForTable(date)}</th>`).join('')}
+                        <th>% Réussite</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
 
-        tasksToRender.forEach(task => {
-            const validationsInPeriod = task.validations.filter(v => v.date >= startDate && v.date <= endDate);
-            const completedCount = validationsInPeriod.filter(v => v.status === 2).length;
-            let percentageText = '-';
-            let progressText = ''; // Pour afficher (3/5)
+        for (const task of tasks) {
+            let completedCount = 0;
+            const totalDaysInPeriod = dateRange.length;
 
-            if (task.target_frequency) {
-                let percentage = task.target_frequency > 0 ? (completedCount / task.target_frequency) * 100 : 0;
+            const cells = dateRange.map(date => {
+                const validation = task.validations[date];
+                if (validation && validation.status === 2) {
+                    completedCount++;
+                }
+                const statusClass = this.getStatusClass(validation ? validation.status : -1);
+                const statusText = this.getStatusText(validation ? validation.status : -1);
+                const noteHtml = validation && validation.note
+                    ? `<span class="note-tooltip"><i class="fas fa-comment-alt"></i><span class="tooltip-text">${this.escapeHtml(validation.note)}</span></span>`
+                    : '';
+                const isCurrentDay = date === todayStr;
+                return `<td class="status-cell ${isCurrentDay ? 'current-day-cell' : ''}"><span class="status-indicator ${statusClass}">${statusText}</span>${noteHtml}</td>`;
+            }).join('');
+
+            const target = task.target_frequency;
+            let percentage = 0;
+            let proratedTarget = 0;
+            
+            if (target > 0 && totalDaysInPeriod > 0) {
+                proratedTarget = (target / 7) * totalDaysInPeriod;
+                percentage = proratedTarget > 0 ? (completedCount / proratedTarget) * 100 : 0;
                 percentage = Math.min(percentage, 100);
-                percentageText = `${Math.round(percentage)}%`;
-                progressText = `<span class="history-progress">(${completedCount}/${task.target_frequency})</span>`;
+            } else if (totalDaysInPeriod > 0) {
+                percentage = (completedCount / totalDaysInPeriod) * 100;
             }
+            
+            const progressText = target ? `(Objectif: ${completedCount}/${Math.round(proratedTarget)})` : `(${completedCount}/${totalDaysInPeriod})`;
 
-            tableHTML += `<tr>
-                <td class="task-name">${this.escapeHtml(task.name)} ${progressText}</td>
-                ${dates.map(date => {
-                    const validation = task.validations.find(v => v.date === date);
-                    const isCurrentDay = date === todayStr;
-                    let cellContent;
+            tableHtml += `
+                <tr>
+                    <td class="task-name">
+                        ${this.escapeHtml(task.name)}
+                        <span class="history-progress">${progressText}</span>
+                    </td>
+                    ${cells}
+                    <td class="percentage-cell">${percentage.toFixed(0)}%</td>
+                </tr>
+            `;
+        }
 
-                    if (!validation) {
-                        cellContent = '<span class="status-indicator empty">-</span>';
-                    } else {
-                        const statusClass = this.getStatusClass(validation.status);
-                        const statusText = this.getStatusText(validation.status);
-                        cellContent = `<span class="status-indicator ${statusClass}">${statusText}</span>`;
-                        if (validation.note) {
-                            cellContent += `<div class="note-tooltip">📝<span class="tooltip-text">${this.escapeHtml(validation.note)}</span></div>`;
-                        }
-                    }
-                    return `<td class="status-cell ${isCurrentDay ? 'current-day-cell' : ''}">${cellContent}</td>`;
-                }).join('')}
-                <td class="percentage-cell">${percentageText}</td>
-            </tr>`;
-        });
-
-        tableHTML += '</tbody></table>';
-        this.historyTable.innerHTML = tableHTML;
+        tableHtml += `</tbody></table>`;
+        this.historyTable.innerHTML = tableHtml;
+        this.noHistoryDiv.style.display = 'none';
     }
 
     getStatusClass(status) {
@@ -457,33 +481,28 @@ class TaskManager {
     }
 
     openValidationModal(taskId, date) {
-        const todayStr = new Date().toISOString().split('T')[0];
-        if (date > todayStr) {
-            this.showNotification('Vous ne pouvez pas valider un jour futur.', 'error');
-            return;
-        }
-        
+        const task = this.tasksMap.get(taskId);
+        if (!task) return;
+
         this.validatingTaskId = taskId;
         this.validatingDate = date;
         this.selectedStatus = null;
-        
         this.statusButtons.forEach(btn => btn.classList.remove('active'));
         
-        const task = this.tasksMap.get(taskId);
-        const validationExists = task && task.validations[date];
-        
-        if (validationExists) {
-            this.initialStatus = task.validations[date].status; // On garde en mémoire l'état initial
-            this.selectedStatus = this.initialStatus;
-            this.statusButtons.forEach(btn => {
-                if (parseInt(btn.dataset.status) === this.initialStatus) btn.classList.add('active');
-            });
-            this.validationNote.value = task.validations[date].note || '';
+        const validation = task.validations[date];
+        if (validation) {
+            this.validationNote.value = validation.note || '';
+            const statusBtn = this.validationForm.querySelector(`.status-btn[data-status="${validation.status}"]`);
+            if(statusBtn) {
+                statusBtn.classList.add('active');
+                this.selectedStatus = validation.status;
+            }
+            this.deleteValidationBtn.style.display = 'inline-flex';
         } else {
-            this.initialStatus = null;
             this.validationNote.value = '';
+            this.deleteValidationBtn.style.display = 'none';
         }
-        
+
         this.validationModal.classList.add('show');
     }
 
@@ -504,76 +523,83 @@ class TaskManager {
 
     async handleValidation(e) {
         e.preventDefault();
-        
-        // Si aucun statut n'est sélectionné MAIS qu'il y en avait un avant
-        if (this.selectedStatus === null && this.initialStatus !== null) {
-            // C'est une demande de suppression
-            await this.handleDeleteValidation();
-            return;
-        }
-
-        // Si aucun statut n'est sélectionné et qu'il n'y en avait pas avant, on ne fait rien
         if (this.selectedStatus === null) {
-            this.closeValidationModal();
+            this.showNotification('Veuillez sélectionner un statut.', 'error');
             return;
         }
 
         const note = this.validationNote.value.trim();
+        const taskId = this.validatingTaskId;
+        const date = this.validatingDate;
 
         try {
-            const response = await fetch(`/api/tasks/${this.validatingTaskId}/validate`, {
+            const response = await fetch('/api/validations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ date: this.validatingDate, status: this.selectedStatus, note: note || null })
+                body: JSON.stringify({
+                    task_id: taskId,
+                    date: date,
+                    status: this.selectedStatus,
+                    note: note
+                })
             });
 
-            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
-            
-            const task = this.tasksMap.get(this.validatingTaskId);
-            if (task) {
-                task.validations[this.validatingDate] = { status: this.selectedStatus, note: note || null };
-                this.tasksMap.set(this.validatingTaskId, task);
-                this.renderTasks();
-                this.updateStats();
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Erreur inattendue du serveur' }));
+                throw new Error(errorData.error);
             }
-            
+
+            // Mettre à jour l'état local dans tasksMap
+            const task = this.tasksMap.get(taskId);
+            if (task) {
+                task.validations[date] = { status: this.selectedStatus, note };
+            }
+
             this.closeValidationModal();
-            this.showNotification('Tâche validée avec succès', 'success');
+            this.renderTasks(); // Rafraîchir l'affichage
+            this.updateStats();
+            this.showNotification('Validation enregistrée avec succès.', 'success');
+
         } catch (error) {
-            this.showNotification(error.message, 'error');
+            console.error('Erreur validation:', error);
+            this.showNotification(error.message || 'Impossible d\'enregistrer la validation.', 'error');
         }
     }
 
     async handleDeleteValidation() {
-        if (!this.validatingTaskId || !this.validatingDate) return;
+        const taskId = this.validatingTaskId;
+        const date = this.validatingDate;
 
         try {
-            const response = await fetch(`/api/tasks/${this.validatingTaskId}/validate`, {
+            const response = await fetch('/api/validations', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ date: this.validatingDate })
+                body: JSON.stringify({ task_id: taskId, date: date })
             });
 
-            if (!response.ok) throw new Error((await response.json()).error || 'Erreur de suppression');
+            if (!response.ok && response.status !== 204) {
+                 const errorData = await response.json().catch(() => ({ error: 'Erreur inattendue du serveur' }));
+                throw new Error(errorData.error);
+            }
 
-            const task = this.tasksMap.get(this.validatingTaskId);
-            if (task) {
-                delete task.validations[this.validatingDate];
-                this.tasksMap.set(this.validatingTaskId, task);
-                this.renderTasks();
-                this.updateStats();
+            const task = this.tasksMap.get(taskId);
+            if (task && task.validations[date]) {
+                delete task.validations[date];
             }
 
             this.closeValidationModal();
-            this.showNotification('Validation supprimée', 'info');
+            this.renderTasks();
+            this.updateStats();
+            this.showNotification('Validation retirée avec succès.', 'success');
 
         } catch (error) {
-            this.showNotification(error.message, 'error');
+            console.error('Erreur suppression validation:', error);
+            this.showNotification(error.message || 'Impossible de retirer la validation.', 'error');
         }
     }
 
     async deleteTask(taskId) {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche récurrente ?')) return;
+        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche et tout son historique ?')) return;
 
         try {
             const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
@@ -739,14 +765,20 @@ class TaskManager {
 
     changeWeek(weeks) {
         this.currentWeekStart.setDate(this.currentWeekStart.getDate() + (weeks * 7));
-        this.loadTasks(); // Recharge les données pour la nouvelle semaine (qui seront fusionnées)
         this.updateWeekDisplay();
+        this.loadValidationsForCurrentWeek().then(() => {
+            this.renderTasks();
+            this.updateStats();
+        });
     }
 
     goToThisWeek() {
         this.currentWeekStart = this.getWeekStart(new Date());
-        this.loadTasks();
         this.updateWeekDisplay();
+        this.loadValidationsForCurrentWeek().then(() => {
+            this.renderTasks();
+            this.updateStats();
+        });
     }
 
     escapeHtml(text) {
@@ -943,6 +975,89 @@ class TaskManager {
         }
 
         this.heatmapGrid.appendChild(wrapper);
+    }
+
+    async loadAndRenderStatistics() {
+        try {
+            const response = await fetch('/api/statistics');
+            if (!response.ok) throw new Error('Erreur de chargement des statistiques');
+            const stats = await response.json();
+
+            const haveTaskData = stats.taskSuccess && stats.taskSuccess.length > 0;
+
+            if (!haveTaskData) {
+                this.noStatsData.style.display = 'block';
+                return;
+            }
+            this.noStatsData.style.display = 'none';
+
+            if (haveTaskData) this.renderTaskSuccessChart(stats.taskSuccess);
+
+        } catch (error) {
+            console.error('Erreur stats:', error);
+            this.noStatsData.style.display = 'block';
+            this.showNotification('Impossible de charger les statistiques', 'error');
+        }
+    }
+
+    renderTaskSuccessChart(data) {
+        if (this.taskSuccessChart) {
+            this.taskSuccessChart.destroy();
+        }
+        const container = document.getElementById('taskSuccessChart').parentElement;
+        container.innerHTML = '<canvas id="taskSuccessChart"></canvas>';
+        
+        // Gérer la largeur dynamique
+        const numTasks = data.length;
+        if (numTasks > 0) {
+            const barWidth = 80;
+            const baseWidth = 150;
+            let calculatedWidth = baseWidth + numTasks * barWidth;
+
+            const minWidth = 300;
+            const maxWidth = 1100;
+
+            calculatedWidth = Math.max(minWidth, calculatedWidth);
+            calculatedWidth = Math.min(maxWidth, calculatedWidth);
+            
+            container.style.width = `${calculatedWidth}px`;
+        } else {
+            container.style.width = '100%';
+        }
+
+        const ctx = document.getElementById('taskSuccessChart').getContext('2d');
+        this.taskSuccessChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.name),
+                datasets: [{
+                    label: '% de réussite',
+                    data: data.map(d => d.success_rate.toFixed(2)),
+                    backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                    borderColor: 'rgba(102, 126, 234, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value + "%"
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
     }
 }
 
