@@ -227,7 +227,7 @@ app.post('/api/tasks/:id/validate', (req, res) => {
   });
 });
 
-// DELETE a specific task validation
+  // DELETE a specific task validation
 app.delete('/api/tasks/:taskId/validate', (req, res) => {
     const { taskId } = req.params;
     const { date } = req.body;
@@ -236,7 +236,7 @@ app.delete('/api/tasks/:taskId/validate', (req, res) => {
         return res.status(400).json({ error: 'Date is required' });
     }
 
-    db.run('DELETE FROM task_validations WHERE task_id = ? AND date = ?', [taskId, date], function(err) {
+    db.run('DELETE FROM daily_validations WHERE task_id = ? AND date = ?', [taskId, date], function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
         }

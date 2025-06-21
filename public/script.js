@@ -62,7 +62,6 @@ class TaskManager {
         this.closeValidationModalBtn = document.getElementById('closeValidationModal');
         this.cancelValidation = document.getElementById('cancelValidation');
         this.statusButtons = document.querySelectorAll('.status-btn');
-        this.deleteValidationBtn = document.getElementById('deleteValidationBtn');
     }
 
     bindEvents() {
@@ -92,7 +91,6 @@ class TaskManager {
         this.closeValidationModalBtn.addEventListener('click', () => this.closeValidationModal());
         this.cancelValidation.addEventListener('click', () => this.closeValidationModal());
         this.validationForm.addEventListener('submit', (e) => this.handleValidation(e));
-        this.deleteValidationBtn.addEventListener('click', () => this.handleDeleteValidation());
 
         // Boutons de statut
         this.statusButtons.forEach(btn => {
@@ -148,7 +146,15 @@ class TaskManager {
         this.historyView.style.display = view === 'history' ? 'grid' : 'none';
         
         if (view === 'history') {
-            // Charge l'historique avec la période déjà sélectionnée
+            // Synchronise par défaut la vue historique avec la semaine de la vue quotidienne
+            const startDate = this.currentWeekStart.toISOString().split('T')[0];
+            const endDate = this.getWeekEnd(this.currentWeekStart).toISOString().split('T')[0];
+            
+            // Met à jour les champs du calendrier, ce qui permet à l'utilisateur de les modifier
+            this.historyStartDate.value = startDate;
+            this.historyEndDate.value = endDate;
+            
+            // Charge immédiatement l'historique pour cette période
             this.loadHistory();
         }
     }
@@ -448,17 +454,16 @@ class TaskManager {
         
         const task = this.tasksMap.get(taskId);
         const validationExists = task && task.validations[date];
-
-        this.deleteValidationBtn.style.display = validationExists ? 'inline-block' : 'none';
-
+        
         if (validationExists) {
-            const currentStatus = task.validations[date].status;
-            this.selectedStatus = currentStatus;
+            this.initialStatus = task.validations[date].status; // On garde en mémoire l'état initial
+            this.selectedStatus = this.initialStatus;
             this.statusButtons.forEach(btn => {
-                if (parseInt(btn.dataset.status) === currentStatus) btn.classList.add('active');
+                if (parseInt(btn.dataset.status) === this.initialStatus) btn.classList.add('active');
             });
             this.validationNote.value = task.validations[date].note || '';
         } else {
+            this.initialStatus = null;
             this.validationNote.value = '';
         }
         
@@ -466,16 +471,33 @@ class TaskManager {
     }
 
     selectStatus(button) {
-        this.statusButtons.forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-        this.selectedStatus = parseInt(button.dataset.status);
+        const status = parseInt(button.dataset.status);
+
+        // Si le bouton cliqué est déjà actif, on désélectionne tout
+        if (button.classList.contains('active')) {
+            button.classList.remove('active');
+            this.selectedStatus = null;
+        } else {
+            // Sinon, on met à jour normalement
+            this.statusButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            this.selectedStatus = status;
+        }
     }
 
     async handleValidation(e) {
         e.preventDefault();
         
+        // Si aucun statut n'est sélectionné MAIS qu'il y en avait un avant
+        if (this.selectedStatus === null && this.initialStatus !== null) {
+            // C'est une demande de suppression
+            await this.handleDeleteValidation();
+            return;
+        }
+
+        // Si aucun statut n'est sélectionné et qu'il n'y en avait pas avant, on ne fait rien
         if (this.selectedStatus === null) {
-            this.showNotification('Veuillez sélectionner un statut', 'error');
+            this.closeValidationModal();
             return;
         }
 
@@ -490,7 +512,6 @@ class TaskManager {
 
             if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
             
-            // Mise à jour dans la "mémoire" centrale
             const task = this.tasksMap.get(this.validatingTaskId);
             if (task) {
                 task.validations[this.validatingDate] = { status: this.selectedStatus, note: note || null };
