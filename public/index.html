@@ -32,7 +32,11 @@
                     <h3><i class="fas fa-plus"></i> Ajouter une tâche récurrente</h3>
                     <form id="taskForm" class="task-form">
                         <div class="form-group">
-                            <input type="text" id="taskTitle" placeholder="Titre de la tâche quotidienne" required>
+                            <input type="text" id="taskName" placeholder="Titre de la tâche" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="targetFrequency">Objectif (fois/semaine, laisser vide si aucun)</label>
+                            <input type="number" id="targetFrequency" min="1" max="7" placeholder="Ex: 5">
                         </div>
                         <div class="form-group">
                             <textarea id="taskDescription" placeholder="Description (optionnelle)"></textarea>
@@ -116,15 +120,20 @@
                     <h3>Modifier la tâche récurrente</h3>
                     <button id="closeModal" class="btn-icon"><i class="fas fa-times"></i></button>
                 </div>
-                <form id="editForm" class="task-form">
+                <form id="editTaskForm" class="task-form">
                     <div class="form-group">
-                        <input type="text" id="editTitle" placeholder="Titre de la tâche" required>
+                        <label for="editTaskName">Nom de la tâche</label>
+                        <input type="text" id="editTaskName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editTargetFrequency">Objectif (fois/semaine)</label>
+                        <input type="number" id="editTargetFrequency" min="1" max="7" placeholder="Ex: 5">
                     </div>
                     <div class="form-group">
                         <textarea id="editDescription" placeholder="Description (optionnelle)"></textarea>
                     </div>
                     <div class="form-actions">
-                        <button type="button" id="cancelEdit" class="btn-secondary">Annuler</button>
+                        <button type="button" class="btn-secondary" id="cancelEdit">Annuler</button>
                         <button type="submit" class="btn-primary">Sauvegarder</button>
                     </div>
                 </form>
@@ -158,6 +167,9 @@
                         <textarea id="validationNote" placeholder="Expliquez pourquoi la tâche n'est pas faite ou partiellement faite..."></textarea>
                     </div>
                     <div class="form-actions">
+                        <button type="button" id="deleteValidationBtn" class="btn-danger" style="display: none;" title="Supprimer la validation">
+                            <i class="fas fa-trash"></i>
+                        </button>
                         <button type="button" id="cancelValidation" class="btn-secondary">Annuler</button>
                         <button type="submit" class="btn-primary">Valider</button>
                     </div>

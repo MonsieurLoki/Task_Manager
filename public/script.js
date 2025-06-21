@@ -1,15 +1,15 @@
-class DailyTaskManager {
+class TaskManager {
     constructor() {
         this.currentWeekStart = this.getWeekStart(new Date());
-        this.tasks = [];
+        this.tasksMap = new Map(); // "Mémoire" centrale pour les tâches et validations
         this.editingTaskId = null;
         this.validatingTaskId = null;
         this.selectedStatus = null;
-        this.currentView = 'daily'; // 'daily' ou 'history'
+        this.currentView = 'daily';
         
         this.initializeElements();
         this.bindEvents();
-        this.loadTasks();
+        this.loadTasks(); // Charge les tâches de la semaine initiale
         this.updateWeekDisplay();
         this.initializeHistoryDates();
     }
@@ -29,7 +29,8 @@ class DailyTaskManager {
 
         // Formulaire
         this.taskForm = document.getElementById('taskForm');
-        this.taskTitleInput = document.getElementById('taskTitle');
+        this.taskNameInput = document.getElementById('taskName');
+        this.targetFrequencyInput = document.getElementById('targetFrequency');
         this.taskDescriptionInput = document.getElementById('taskDescription');
 
         // Liste des tâches
@@ -47,8 +48,9 @@ class DailyTaskManager {
 
         // Modal d'édition
         this.editModal = document.getElementById('editModal');
-        this.editForm = document.getElementById('editForm');
-        this.editTitleInput = document.getElementById('editTitle');
+        this.editForm = document.getElementById('editTaskForm');
+        this.editNameInput = document.getElementById('editTaskName');
+        this.editTargetFrequencyInput = document.getElementById('editTargetFrequency');
         this.editDescriptionInput = document.getElementById('editDescription');
         this.closeModalBtn = document.getElementById('closeModal');
         this.cancelEditBtn = document.getElementById('cancelEdit');
@@ -60,6 +62,7 @@ class DailyTaskManager {
         this.closeValidationModalBtn = document.getElementById('closeValidationModal');
         this.cancelValidation = document.getElementById('cancelValidation');
         this.statusButtons = document.querySelectorAll('.status-btn');
+        this.deleteValidationBtn = document.getElementById('deleteValidationBtn');
     }
 
     bindEvents() {
@@ -89,6 +92,7 @@ class DailyTaskManager {
         this.closeValidationModalBtn.addEventListener('click', () => this.closeValidationModal());
         this.cancelValidation.addEventListener('click', () => this.closeValidationModal());
         this.validationForm.addEventListener('submit', (e) => this.handleValidation(e));
+        this.deleteValidationBtn.addEventListener('click', () => this.handleDeleteValidation());
 
         // Boutons de statut
         this.statusButtons.forEach(btn => {
@@ -124,7 +128,7 @@ class DailyTaskManager {
     getWeekStart(date) {
         const d = new Date(date);
         const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Lundi = 1, Dimanche = 0
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         return new Date(d.setDate(diff));
     }
 
@@ -137,15 +141,14 @@ class DailyTaskManager {
     switchView(view) {
         this.currentView = view;
         
-        // Mettre à jour les boutons
         this.dailyViewBtn.classList.toggle('active', view === 'daily');
         this.historyViewBtn.classList.toggle('active', view === 'history');
         
-        // Afficher/masquer les vues
         this.dailyView.style.display = view === 'daily' ? 'grid' : 'none';
         this.historyView.style.display = view === 'history' ? 'grid' : 'none';
         
         if (view === 'history') {
+            // Charge l'historique avec la période déjà sélectionnée
             this.loadHistory();
         }
     }
@@ -167,7 +170,7 @@ class DailyTaskManager {
         if (changedInput === 'start') {
             const startDate = new Date(startDateInput.value);
             const maxEndDate = new Date(startDate);
-            maxEndDate.setDate(startDate.getDate() + 11);
+            maxEndDate.setDate(startDate.getDate() + 12);
 
             endDateInput.min = startDateInput.value;
             endDateInput.max = maxEndDate.toISOString().split('T')[0];
@@ -175,10 +178,10 @@ class DailyTaskManager {
             if (new Date(endDateInput.value) > maxEndDate) {
                 endDateInput.value = endDateInput.max;
             }
-        } else { // 'end'
+        } else {
             const endDate = new Date(endDateInput.value);
             const minStartDate = new Date(endDate);
-            minStartDate.setDate(endDate.getDate() - 11);
+            minStartDate.setDate(endDate.getDate() - 12);
             
             startDateInput.max = endDateInput.value;
             startDateInput.min = minStartDate.toISOString().split('T')[0];
@@ -191,14 +194,13 @@ class DailyTaskManager {
 
     async loadTasks() {
         try {
-            // Charger les tâches pour toute la semaine
             const weekEnd = this.getWeekEnd(this.currentWeekStart);
             const response = await fetch(`/api/tasks/history?start_date=${this.currentWeekStart.toISOString().split('T')[0]}&end_date=${weekEnd.toISOString().split('T')[0]}`);
             
             if (!response.ok) throw new Error('Erreur lors du chargement des tâches');
             
             const weekData = await response.json();
-            this.processWeekData(weekData);
+            this.mergeTaskData(weekData); // Fusionne les nouvelles données
             this.renderTasks();
             this.updateStats();
         } catch (error) {
@@ -207,58 +209,42 @@ class DailyTaskManager {
         }
     }
 
-    processWeekData(weekData) {
-        // Grouper les données par tâche
-        const tasksMap = new Map();
-        
-        weekData.forEach(item => {
-            if (!tasksMap.has(item.id)) {
-                tasksMap.set(item.id, {
-                    id: item.id,
-                    title: item.title,
-                    description: item.description,
-                    created_at: item.created_at,
-                    validations: {}
-                });
-            }
-            
+    // NOUVELLE FONCTION pour fusionner les données sans écraser l'historique
+    mergeTaskData(taskData) {
+        taskData.forEach(item => {
+            const task = this.tasksMap.get(item.id) || {
+                id: item.id,
+                validations: {}
+            };
+
+            task.name = item.name;
+            task.target_frequency = item.target_frequency;
+            task.description = item.description;
+            task.created_at = item.created_at;
+
             if (item.date) {
-                tasksMap.get(item.id).validations[item.date] = {
+                task.validations[item.date] = {
                     status: item.status,
                     note: item.note
                 };
             }
+            
+            this.tasksMap.set(item.id, task);
         });
-
-        this.tasks = Array.from(tasksMap.values());
     }
 
     async loadHistory() {
         const startDate = this.historyStartDate.value;
         const endDate = this.historyEndDate.value;
         
-        if (!startDate || !endDate) {
-            this.showNotification('Veuillez sélectionner une période', 'error');
-            return;
-        }
-
-        // Vérifier que la période ne dépasse pas 12 jours
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-        
-        if (daysDiff < 0) return; // Ignore if dates are invalid
-
-        if (daysDiff > 12) {
-            this.showNotification('La période ne peut pas dépasser 12 jours.', 'error');
-            return;
-        }
+        if (!startDate || !endDate) return;
 
         try {
             const response = await fetch(`/api/tasks/history?start_date=${startDate}&end_date=${endDate}`);
             if (!response.ok) throw new Error('Erreur lors du chargement de l\'historique');
             
             const historyData = await response.json();
+            this.mergeTaskData(historyData); // Fusionne aussi pour la vue historique
             this.renderHistory(historyData, startDate, endDate);
         } catch (error) {
             console.error('Erreur:', error);
@@ -276,68 +262,64 @@ class DailyTaskManager {
         this.historyTable.style.display = 'block';
         this.noHistoryDiv.style.display = 'none';
 
-        // Grouper les données par tâche
-        const tasksMap = new Map();
+        const tasksToRender = new Map();
         historyData.forEach(item => {
-            if (!tasksMap.has(item.id)) {
-                tasksMap.set(item.id, {
+            if (!tasksToRender.has(item.id)) {
+                tasksToRender.set(item.id, {
                     id: item.id,
-                    title: item.title,
+                    name: item.name,
+                    target_frequency: item.target_frequency,
                     validations: []
                 });
             }
             if (item.date) {
-                tasksMap.get(item.id).validations.push({
-                    date: item.date,
-                    status: item.status,
-                    note: item.note
-                });
+                const globalTask = this.tasksMap.get(item.id);
+                if (globalTask) {
+                    tasksToRender.get(item.id).validations = Object.entries(globalTask.validations).map(([date, val]) => ({ date, ...val }));
+                }
             }
         });
-
-        // Générer les dates de la période
+        
         const dates = this.generateDateRange(startDate, endDate);
         
-        // Créer le tableau HTML
         let tableHTML = `
             <table>
                 <thead>
                     <tr>
                         <th>Tâche</th>
                         ${dates.map(date => `<th>${this.formatDateForTable(date)}</th>`).join('')}
-                        <th>Valid. %</th>
+                        <th>Objectif %</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
 
-        tasksMap.forEach(task => {
-            const completedCount = task.validations.filter(v => v.status === 2).length;
-            const totalDays = dates.length;
-            const percentage = totalDays > 0 ? Math.round((completedCount / totalDays) * 100) : 0;
+        tasksToRender.forEach(task => {
+            const validationsInPeriod = task.validations.filter(v => v.date >= startDate && v.date <= endDate);
+            const completedCount = validationsInPeriod.filter(v => v.status === 2).length;
+            let percentageText = 'N/A';
+
+            if (task.target_frequency) {
+                const totalAttempts = validationsInPeriod.length;
+                const denominator = Math.max(task.target_frequency, totalAttempts);
+                const percentage = denominator > 0 ? Math.round((completedCount / denominator) * 100) : 0;
+                percentageText = `${percentage}%`;
+            }
 
             tableHTML += `<tr>
-                <td class="task-name">${this.escapeHtml(task.title)}</td>
+                <td class="task-name">${this.escapeHtml(task.name)}</td>
                 ${dates.map(date => {
                     const validation = task.validations.find(v => v.date === date);
-                    if (!validation) {
-                        return '<td class="status-cell"><span class="status-indicator empty">-</span></td>';
-                    }
+                    if (!validation) return '<td class="status-cell"><span class="status-indicator empty">-</span></td>';
                     const statusClass = this.getStatusClass(validation.status);
                     const statusText = this.getStatusText(validation.status);
                     let cellContent = `<span class="status-indicator ${statusClass}">${statusText}</span>`;
-                    
                     if (validation.note) {
-                        cellContent += `
-                            <div class="note-tooltip">📝
-                                <span class="tooltip-text">${this.escapeHtml(validation.note)}</span>
-                            </div>
-                        `;
+                        cellContent += `<div class="note-tooltip">📝<span class="tooltip-text">${this.escapeHtml(validation.note)}</span></div>`;
                     }
-                    
                     return `<td class="status-cell">${cellContent}</td>`;
                 }).join('')}
-                <td class="percentage-cell">${percentage}%</td>
+                <td class="percentage-cell">${percentageText}</td>
             </tr>`;
         });
 
@@ -387,41 +369,30 @@ class DailyTaskManager {
     async handleAddTask(e) {
         e.preventDefault();
         
-        const title = this.taskTitleInput.value.trim();
+        const name = this.taskNameInput.value.trim();
+        const target_frequency = parseInt(this.targetFrequencyInput.value) || null;
         const description = this.taskDescriptionInput.value.trim();
         
-        if (!title) return;
+        if (!name) return;
 
         try {
             const response = await fetch('/api/tasks', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    title,
-                    description
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, target_frequency, description })
             });
 
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Une erreur est survenue.');
-            }
+            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
             
             const newTask = await response.json();
-            this.tasks.push({
-                ...newTask,
-                validations: {}
-            });
+            // Ajout à la "mémoire" centrale
+            this.tasksMap.set(newTask.id, { ...newTask, validations: {} });
+            
             this.renderTasks();
             this.updateStats();
-            
-            // Réinitialiser le formulaire
             this.taskForm.reset();
-            this.showNotification('Tâche récurrente ajoutée avec succès', 'success');
+            this.showNotification('Tâche ajoutée avec succès', 'success');
         } catch (error) {
-            console.error('Erreur:', error);
             this.showNotification(error.message, 'error');
         }
     }
@@ -429,60 +400,62 @@ class DailyTaskManager {
     async handleEditTask(e) {
         e.preventDefault();
         
-        const title = this.editTitleInput.value.trim();
+        const name = this.editNameInput.value.trim();
+        const target_frequency = parseInt(this.editTargetFrequencyInput.value) || null;
         const description = this.editDescriptionInput.value.trim();
         
-        if (!title) return;
+        if (!name || !this.editingTaskId) return;
 
         try {
             const response = await fetch(`/api/tasks/${this.editingTaskId}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    title,
-                    description
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, target_frequency, description })
             });
 
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Une erreur est survenue.');
-            }
+            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
             
             const updatedTask = await response.json();
-            const index = this.tasks.findIndex(t => t.id === this.editingTaskId);
-            if (index !== -1) {
-                this.tasks[index] = { ...this.tasks[index], title: updatedTask.title, description: updatedTask.description };
-                this.renderTasks();
+            // Mise à jour dans la "mémoire" centrale
+            const task = this.tasksMap.get(this.editingTaskId);
+            if (task) {
+                task.name = updatedTask.name;
+                task.target_frequency = updatedTask.target_frequency;
+                task.description = updatedTask.description;
+                this.tasksMap.set(this.editingTaskId, task);
             }
             
+            this.renderTasks();
             this.closeModal();
             this.showNotification('Tâche modifiée avec succès', 'success');
         } catch (error) {
-            console.error('Erreur:', error);
             this.showNotification(error.message, 'error');
         }
     }
 
     openValidationModal(taskId, date) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (date > todayStr) {
+            this.showNotification('Vous ne pouvez pas valider un jour futur.', 'error');
+            return;
+        }
+        
         this.validatingTaskId = taskId;
         this.validatingDate = date;
         this.selectedStatus = null;
         
-        // Réinitialiser les boutons
         this.statusButtons.forEach(btn => btn.classList.remove('active'));
         
-        // Pré-remplir avec le statut actuel s'il existe
-        const task = this.tasks.find(t => t.id === taskId);
-        if (task && task.validations[date]) {
+        const task = this.tasksMap.get(taskId);
+        const validationExists = task && task.validations[date];
+
+        this.deleteValidationBtn.style.display = validationExists ? 'inline-block' : 'none';
+
+        if (validationExists) {
             const currentStatus = task.validations[date].status;
             this.selectedStatus = currentStatus;
             this.statusButtons.forEach(btn => {
-                if (parseInt(btn.dataset.status) === currentStatus) {
-                    btn.classList.add('active');
-                }
+                if (parseInt(btn.dataset.status) === currentStatus) btn.classList.add('active');
             });
             this.validationNote.value = task.validations[date].note || '';
         } else {
@@ -511,29 +484,17 @@ class DailyTaskManager {
         try {
             const response = await fetch(`/api/tasks/${this.validatingTaskId}/validate`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    date: this.validatingDate,
-                    status: this.selectedStatus,
-                    note: note || null
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: this.validatingDate, status: this.selectedStatus, note: note || null })
             });
 
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Une erreur est survenue.');
-            }
+            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
             
-            // Mettre à jour localement
-            const task = this.tasks.find(t => t.id === this.validatingTaskId);
+            // Mise à jour dans la "mémoire" centrale
+            const task = this.tasksMap.get(this.validatingTaskId);
             if (task) {
-                if (!task.validations[this.validatingDate]) {
-                    task.validations[this.validatingDate] = {};
-                }
-                task.validations[this.validatingDate].status = this.selectedStatus;
-                task.validations[this.validatingDate].note = note || null;
+                task.validations[this.validatingDate] = { status: this.selectedStatus, note: note || null };
+                this.tasksMap.set(this.validatingTaskId, task);
                 this.renderTasks();
                 this.updateStats();
             }
@@ -541,43 +502,66 @@ class DailyTaskManager {
             this.closeValidationModal();
             this.showNotification('Tâche validée avec succès', 'success');
         } catch (error) {
-            console.error('Erreur:', error);
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    async handleDeleteValidation() {
+        if (!this.validatingTaskId || !this.validatingDate) return;
+
+        try {
+            const response = await fetch(`/api/tasks/${this.validatingTaskId}/validate`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: this.validatingDate })
+            });
+
+            if (!response.ok) throw new Error((await response.json()).error || 'Erreur de suppression');
+
+            const task = this.tasksMap.get(this.validatingTaskId);
+            if (task) {
+                delete task.validations[this.validatingDate];
+                this.tasksMap.set(this.validatingTaskId, task);
+                this.renderTasks();
+                this.updateStats();
+            }
+
+            this.closeValidationModal();
+            this.showNotification('Validation supprimée', 'info');
+
+        } catch (error) {
             this.showNotification(error.message, 'error');
         }
     }
 
     async deleteTask(taskId) {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche récurrente ? Toutes les validations seront également supprimées.')) return;
+        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche récurrente ?')) return;
 
         try {
-            const response = await fetch(`/api/tasks/${taskId}`, {
-                method: 'DELETE'
-            });
-
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Une erreur est survenue.');
-            }
+            const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
             
-            this.tasks = this.tasks.filter(t => t.id !== taskId);
+            // Suppression de la "mémoire" centrale
+            this.tasksMap.delete(taskId);
             this.renderTasks();
             this.updateStats();
             this.showNotification('Tâche supprimée avec succès', 'success');
         } catch (error) {
-            console.error('Erreur:', error);
             this.showNotification(error.message, 'error');
         }
     }
 
     openEditModal(taskId) {
-        const task = this.tasks.find(t => t.id === taskId);
+        // Utilise la "mémoire" centrale pour trouver les infos
+        const task = this.tasksMap.get(taskId);
         if (!task) return;
 
         this.editingTaskId = taskId;
-        this.editTitleInput.value = task.title;
+        this.editNameInput.value = task.name;
+        this.editTargetFrequencyInput.value = task.target_frequency || '';
         this.editDescriptionInput.value = task.description || '';
         this.editModal.classList.add('show');
-        this.editTitleInput.focus();
+        this.editNameInput.focus();
     }
 
     closeModal() {
@@ -595,7 +579,10 @@ class DailyTaskManager {
     }
 
     renderTasks() {
-        if (this.tasks.length === 0) {
+        const tasks = Array.from(this.tasksMap.values()); // Utilise la "mémoire" centrale
+
+        if (tasks.length === 0) {
+            this.tasksList.innerHTML = '';
             this.tasksList.style.display = 'none';
             this.noTasksDiv.style.display = 'block';
             return;
@@ -604,7 +591,6 @@ class DailyTaskManager {
         this.tasksList.style.display = 'block';
         this.noTasksDiv.style.display = 'none';
 
-        // Générer les dates de la semaine
         const weekDates = [];
         const current = new Date(this.currentWeekStart);
         for (let i = 0; i < 7; i++) {
@@ -612,55 +598,56 @@ class DailyTaskManager {
             current.setDate(current.getDate() + 1);
         }
 
-        this.tasksList.innerHTML = this.tasks.map(task => {
+        const todayStr = new Date().toISOString().split('T')[0]; // CORRECTION: date en string
+
+        this.tasksList.innerHTML = tasks.map(task => {
             const taskValidations = weekDates.map(date => {
                 const dateStr = date.toISOString().split('T')[0];
                 const validation = task.validations[dateStr];
-                const status = validation ? validation.status : null;
-                const note = validation ? validation.note : null;
+                const isFutureDate = dateStr > todayStr; // CORRECTION: comparaison de strings
                 
                 return {
                     date: dateStr,
-                    status: status,
-                    note: note,
-                    displayDate: date.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' })
+                    status: validation ? validation.status : null,
+                    note: validation ? validation.note : null,
+                    displayDate: date.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' }),
+                    isFutureDate: isFutureDate
                 };
             });
+
+            const progress = this.calculateProgress(task);
+            const streakInfo = this.calculateStreak(task); // Maintenant correct grâce à la "mémoire"
 
             return `
                 <div class="task-item" data-id="${task.id}">
                     <div class="task-header">
-                        <div class="task-title">${this.escapeHtml(task.title)}</div>
+                        <div class="task-name">${this.escapeHtml(task.name)}</div>
+                        <div class="task-meta">
+                            ${task.target_frequency ? `<span class="task-target" title="Objectif hebdomadaire">🎯 ${progress.completedCount}/${task.target_frequency}</span>` : ''}
+                            ${streakInfo.streak > 0 && task.target_frequency === 7 ? `<span class="task-streak" title="Série de validations consécutives">🔥 ${streakInfo.streak}</span>` : ''}
+                        </div>
                     </div>
                     ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
-                    
                     <div class="week-validations">
-                        ${taskValidations.map(validation => {
-                            const statusClass = validation.status !== null ? this.getStatusClass(validation.status) : 'empty';
-                            const statusText = validation.status !== null ? this.getStatusText(validation.status) : '-';
-                            const hasNote = validation.note && validation.note.trim() !== '';
-                            
+                        ${taskValidations.map(v => {
+                            const statusClass = v.status !== null ? this.getStatusClass(v.status) : 'empty';
+                            const isClickable = !v.isFutureDate;
                             return `
                                 <div class="day-validation">
-                                    <div class="day-label">${validation.displayDate}</div>
-                                    <div class="task-checkbox ${statusClass}" 
-                                         onclick="taskManager.openValidationModal(${task.id}, '${validation.date}')"
-                                         title="${hasNote ? 'Note: ' + this.escapeHtml(validation.note) : 'Cliquer pour valider'}">
-                                        ${statusText}
+                                    <div class="day-label">${v.displayDate}</div>
+                                    <div class="task-checkbox ${statusClass} ${!isClickable ? 'future-date' : ''}" 
+                                         ${isClickable ? `onclick="taskManager.openValidationModal(${task.id}, '${v.date}')"` : ''}
+                                         title="${v.isFutureDate ? 'Jour futur' : v.note ? this.escapeHtml(v.note) : 'Valider'}">
+                                        ${this.getStatusText(v.status)}
                                     </div>
-                                    ${hasNote ? `<div class="note-indicator" title="${this.escapeHtml(validation.note)}">📝</div>` : ''}
+                                    ${v.note ? `<div class="note-indicator" title="${this.escapeHtml(v.note)}">📝</div>` : ''}
                                 </div>
                             `;
                         }).join('')}
                     </div>
-                    
                     <div class="task-actions">
-                        <button class="action-btn edit" onclick="taskManager.openEditModal(${task.id})" title="Modifier">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="action-btn delete" onclick="taskManager.deleteTask(${task.id})" title="Supprimer">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        <button class="action-btn edit" onclick="taskManager.openEditModal(${task.id})" title="Modifier"><i class="fas fa-edit"></i></button>
+                        <button class="action-btn delete" onclick="taskManager.deleteTask(${task.id})" title="Supprimer"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
             `;
@@ -668,20 +655,27 @@ class DailyTaskManager {
     }
 
     updateStats() {
-        let completed = 0;
-        let total = 0;
+        let completedInWeek = 0;
+        let totalInWeek = 0;
+        
+        const weekDates = this.generateDateRange(
+            this.currentWeekStart.toISOString().split('T')[0],
+            this.getWeekEnd(this.currentWeekStart).toISOString().split('T')[0]
+        );
 
-        this.tasks.forEach(task => {
-            Object.values(task.validations).forEach(validation => {
-                total++;
-                if (validation.status === 2) { // Completed
-                    completed++;
+        this.tasksMap.forEach(task => {
+            weekDates.forEach(date => {
+                if (task.validations[date]) {
+                    totalInWeek++;
+                    if (task.validations[date].status === 2) {
+                        completedInWeek++;
+                    }
                 }
             });
         });
         
-        this.completedCountSpan.textContent = completed;
-        this.totalCountSpan.textContent = total;
+        this.completedCountSpan.textContent = completedInWeek;
+        this.totalCountSpan.textContent = totalInWeek;
     }
 
     updateWeekDisplay() {
@@ -693,7 +687,7 @@ class DailyTaskManager {
 
     changeWeek(weeks) {
         this.currentWeekStart.setDate(this.currentWeekStart.getDate() + (weeks * 7));
-        this.loadTasks();
+        this.loadTasks(); // Recharge les données pour la nouvelle semaine (qui seront fusionnées)
         this.updateWeekDisplay();
     }
 
@@ -704,13 +698,13 @@ class DailyTaskManager {
     }
 
     escapeHtml(text) {
+        if (!text) return '';
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 
     showNotification(message, type = 'info') {
-        // Créer une notification temporaire
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
         notification.textContent = message;
@@ -731,7 +725,6 @@ class DailyTaskManager {
 
         document.body.appendChild(notification);
 
-        // Supprimer après 3 secondes
         setTimeout(() => {
             notification.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => {
@@ -741,9 +734,47 @@ class DailyTaskManager {
             }, 300);
         }, 3000);
     }
+
+    calculateProgress(task) {
+        const weekDates = this.generateDateRange(
+            this.currentWeekStart.toISOString().split('T')[0],
+            this.getWeekEnd(this.currentWeekStart).toISOString().split('T')[0]
+        );
+        let completedCount = 0;
+
+        weekDates.forEach(date => {
+            if (task.validations[date] && task.validations[date].status === 2) {
+                completedCount++;
+            }
+        });
+        return { completedCount };
+    }
+
+    calculateStreak(task) {
+        let streak = 0;
+        let checkDate = new Date();
+        
+        // Boucle pour vérifier les jours passés
+        for (let i = 0; i < 365; i++) {
+            const dateStr = checkDate.toISOString().split('T')[0];
+            const validation = task.validations[dateStr];
+
+            if (validation && validation.status === 2) {
+                streak++;
+            } else {
+                // La série se brise si un jour n'est pas validé (sauf aujourd'hui)
+                const todayStr = new Date().toISOString().split('T')[0];
+                if (dateStr !== todayStr) {
+                    break;
+                }
+            }
+            checkDate.setDate(checkDate.getDate() - 1);
+        }
+        return { streak };
+    }
 }
 
-// Styles pour les animations de notification
+// Styles pour les animations et éléments de gamification
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {
@@ -794,11 +825,41 @@ style.textContent = `
         cursor: help;
     }
     
-    .note-tooltip {
+    .task-meta {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 5px;
+    }
+    
+    .task-target {
+        background: #4299e1;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
         font-size: 0.8rem;
-        color: #e53e3e;
-        cursor: help;
-        margin-left: 5px;
+        font-weight: 600;
+    }
+    
+    .task-streak {
+        background: #ed8936;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .task-checkbox.future-date {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background-color: #f7fafc;
+        border: 1px solid #e2e8f0;
+    }
+    
+    .task-checkbox.future-date:hover {
+        background-color: #f7fafc;
+        transform: none;
     }
 `;
 document.head.appendChild(style);
@@ -806,5 +867,5 @@ document.head.appendChild(style);
 // Initialiser l'application
 let taskManager;
 document.addEventListener('DOMContentLoaded', () => {
-    taskManager = new DailyTaskManager();
+    taskManager = new TaskManager();
 }); 

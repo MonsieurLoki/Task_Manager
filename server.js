@@ -20,8 +20,9 @@ db.serialize(() => {
   // Table des tâches récurrentes
   db.run(`CREATE TABLE IF NOT EXISTS recurring_tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     description TEXT,
+    target_frequency INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -52,15 +53,17 @@ app.get('/api/tasks', (req, res) => {
   const query = `
     SELECT 
       rt.id,
-      rt.title,
-      rt.description,
-      rt.created_at,
-      COALESCE(dv.status, 0) as status,
-      dv.note,
-      dv.date as validation_date
-    FROM recurring_tasks rt
-    LEFT JOIN daily_validations dv ON rt.id = dv.task_id AND dv.date = ?
-    ORDER BY rt.created_at ASC
+      rt.name,
+      rt.target_frequency,
+      v.date,
+      v.status,
+      v.note
+    FROM 
+      recurring_tasks rt
+    LEFT JOIN 
+      daily_validations v ON rt.id = v.task_id
+    ORDER BY 
+      rt.created_at DESC;
   `;
 
   db.all(query, [date], (err, rows) => {
@@ -84,15 +87,19 @@ app.get('/api/tasks/history', (req, res) => {
   const query = `
     SELECT 
       rt.id,
-      rt.title,
-      rt.description,
-      rt.created_at,
-      dv.date,
-      dv.status,
-      dv.note
-    FROM recurring_tasks rt
-    LEFT JOIN daily_validations dv ON rt.id = dv.task_id AND dv.date BETWEEN ? AND ?
-    ORDER BY rt.created_at ASC, dv.date ASC
+      rt.name,
+      rt.target_frequency,
+      v.date,
+      v.status,
+      v.note
+    FROM 
+      recurring_tasks rt
+    LEFT JOIN 
+      daily_validations v ON rt.id = v.task_id
+    WHERE 
+      v.date BETWEEN ? AND ?
+    ORDER BY 
+      rt.created_at DESC, v.date ASC;
   `;
 
   db.all(query, [start_date, end_date], (err, rows) => {
@@ -106,72 +113,44 @@ app.get('/api/tasks/history', (req, res) => {
 
 // POST /api/tasks - Créer une nouvelle tâche récurrente
 app.post('/api/tasks', (req, res) => {
-  const { title, description } = req.body;
-  
-  if (!title) {
-    res.status(400).json({ error: 'Le titre est requis' });
-    return;
+  const { name, target_frequency } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Le nom de la tâche est requis.' });
   }
 
-  const normalizedTitle = title.trim();
-
-  // Vérifier si une tâche avec le même titre existe déjà (insensible à la casse)
-  const checkQuery = 'SELECT id FROM recurring_tasks WHERE UPPER(title) = UPPER(?)';
-  db.get(checkQuery, [normalizedTitle], (err, row) => {
+  const query = 'INSERT INTO recurring_tasks (name, target_frequency) VALUES (?, ?)';
+  db.run(query, [name, target_frequency], function (err) {
     if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-
-    if (row) {
-      res.status(409).json({ error: 'Une tâche avec ce titre existe déjà.' });
-      return;
-    }
-    
-    const query = 'INSERT INTO recurring_tasks (title, description) VALUES (?, ?)';
-    db.run(query, [normalizedTitle, description], function(err) {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
+      if (err.message.includes('UNIQUE constraint failed')) {
+        return res.status(409).json({ error: 'Une tâche avec ce nom existe déjà.' });
       }
-      
-      // Récupérer la tâche créée
-      db.get('SELECT * FROM recurring_tasks WHERE id = ?', [this.lastID], (err, newRow) => {
-        if (err) {
-          res.status(500).json({ error: err.message });
-          return;
-        }
-        res.status(201).json(newRow);
-      });
-    });
+      return res.status(500).json({ error: err.message });
+    }
+    res.status(201).json({ id: this.lastID, name, target_frequency });
   });
 });
 
 // PUT /api/tasks/:id - Modifier une tâche récurrente
 app.put('/api/tasks/:id', (req, res) => {
   const { id } = req.params;
-  const { title, description } = req.body;
+  const { name, target_frequency } = req.body;
 
-  const query = 'UPDATE recurring_tasks SET title = ?, description = ? WHERE id = ?';
-  db.run(query, [title, description, id], function(err) {
+  if (!name) {
+    return res.status(400).json({ error: 'Le nom de la tâche est requis.' });
+  }
+
+  const query = 'UPDATE recurring_tasks SET name = ?, target_frequency = ? WHERE id = ?';
+  db.run(query, [name, target_frequency, id], function (err) {
     if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    
-    if (this.changes === 0) {
-      res.status(404).json({ error: 'Tâche non trouvée' });
-      return;
-    }
-    
-    // Récupérer la tâche mise à jour
-    db.get('SELECT * FROM recurring_tasks WHERE id = ?', [id], (err, row) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
+      if (err.message.includes('UNIQUE constraint failed')) {
+        return res.status(409).json({ error: 'Une autre tâche avec ce nom existe déjà.' });
       }
-      res.json(row);
-    });
+      return res.status(500).json({ error: err.message });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Tâche non trouvée.' });
+    }
+    res.status(200).json({ message: 'Tâche mise à jour avec succès.' });
   });
 });
 
@@ -246,6 +225,26 @@ app.post('/api/tasks/:id/validate', (req, res) => {
       });
     });
   });
+});
+
+// DELETE a specific task validation
+app.delete('/api/tasks/:taskId/validate', (req, res) => {
+    const { taskId } = req.params;
+    const { date } = req.body;
+
+    if (!date) {
+        return res.status(400).json({ error: 'Date is required' });
+    }
+
+    db.run('DELETE FROM task_validations WHERE task_id = ? AND date = ?', [taskId, date], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Validation not found' });
+        }
+        res.status(200).json({ message: 'Validation deleted successfully' });
+    });
 });
 
 // Route pour servir l'application
