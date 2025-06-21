@@ -21,6 +21,7 @@
                 <div class="view-toggle">
                     <button id="dailyViewBtn" class="btn-secondary active">Vue Quotidienne</button>
                     <button id="historyViewBtn" class="btn-secondary">Vue Historique</button>
+                    <button id="heatmapViewBtn" class="btn-secondary">Vue Calendrier</button>
                 </div>
                 <div class="focus-mode-toggle">
                     <label for="focusMode" class="focus-label">Mode Focus</label>
@@ -116,6 +117,33 @@
                         <p>Aucune donnée pour cette période</p>
                         <p>Sélectionnez une autre période ou validez des tâches !</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- Vue Calendrier (Heatmap) -->
+            <div id="heatmapView" class="view-container" style="display: none;">
+                <div class="heatmap-header">
+                    <h2>Calendrier Annuel</h2>
+                    <div class="heatmap-controls">
+                        <label for="heatmapYear">Année :</label>
+                        <select id="heatmapYear" class="date-input"></select>
+                    </div>
+                </div>
+                <div id="heatmapGrid" class="heatmap-grid">
+                    <!-- La grille du calendrier sera générée ici -->
+                </div>
+                <div class="heatmap-legend">
+                    <span>Moins</span>
+                    <div class="heatmap-cell legend-cell level-0"></div>
+                    <div class="heatmap-cell legend-cell level-1"></div>
+                    <div class="heatmap-cell legend-cell level-2"></div>
+                    <div class="heatmap-cell legend-cell level-3"></div>
+                    <div class="heatmap-cell legend-cell level-4"></div>
+                    <span>Plus</span>
+                </div>
+                <div id="noHeatmapData" class="no-tasks" style="display: none;">
+                    <i class="fas fa-calendar-times"></i>
+                    <p>Aucune tâche complétée pour cette année.</p>
                 </div>
             </div>
         </main>

@@ -247,6 +247,35 @@ app.delete('/api/tasks/:taskId/validate', (req, res) => {
     });
 });
 
+// GET /api/heatmap - Récupérer les données pour la heatmap annuelle
+app.get('/api/heatmap', (req, res) => {
+    const { year } = req.query;
+    if (!year) {
+        return res.status(400).json({ error: 'L\'année est requise' });
+    }
+
+    const query = `
+        SELECT
+            date,
+            COUNT(id) AS completion_count
+        FROM
+            daily_validations
+        WHERE
+            status = 2 AND SUBSTR(date, 1, 4) = ?
+        GROUP BY
+            date
+        ORDER BY
+            date ASC;
+    `;
+
+    db.all(query, [year], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
+});
+
 // Route pour servir l'application
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

@@ -63,6 +63,13 @@ class TaskManager {
         this.cancelValidation = document.getElementById('cancelValidation');
         this.statusButtons = document.querySelectorAll('.status-btn');
         this.focusModeToggle = document.getElementById('focusMode');
+
+        // Vue Calendrier
+        this.heatmapViewBtn = document.getElementById('heatmapViewBtn');
+        this.heatmapView = document.getElementById('heatmapView');
+        this.heatmapYearSelect = document.getElementById('heatmapYear');
+        this.heatmapGrid = document.getElementById('heatmapGrid');
+        this.noHeatmapData = document.getElementById('noHeatmapData');
     }
 
     bindEvents() {
@@ -74,7 +81,9 @@ class TaskManager {
         // Changement de vue
         this.dailyViewBtn.addEventListener('click', () => this.switchView('daily'));
         this.historyViewBtn.addEventListener('click', () => this.switchView('history'));
+        this.heatmapViewBtn.addEventListener('click', () => this.switchView('heatmap'));
         this.focusModeToggle.addEventListener('change', () => this.renderTasks());
+        this.heatmapYearSelect.addEventListener('change', () => this.loadHeatmapData());
 
         // Formulaire d'ajout
         this.taskForm.addEventListener('submit', (e) => this.handleAddTask(e));
@@ -143,21 +152,16 @@ class TaskManager {
         
         this.dailyViewBtn.classList.toggle('active', view === 'daily');
         this.historyViewBtn.classList.toggle('active', view === 'history');
+        this.heatmapViewBtn.classList.toggle('active', view === 'heatmap');
         
         this.dailyView.style.display = view === 'daily' ? 'grid' : 'none';
         this.historyView.style.display = view === 'history' ? 'grid' : 'none';
+        this.heatmapView.style.display = view === 'heatmap' ? 'block' : 'none';
         
         if (view === 'history') {
-            // Synchronise par défaut la vue historique avec la semaine de la vue quotidienne
-            const startDate = this.currentWeekStart.toISOString().split('T')[0];
-            const endDate = this.getWeekEnd(this.currentWeekStart).toISOString().split('T')[0];
-            
-            // Met à jour les champs du calendrier, ce qui permet à l'utilisateur de les modifier
-            this.historyStartDate.value = startDate;
-            this.historyEndDate.value = endDate;
-            
-            // Charge immédiatement l'historique pour cette période
             this.loadHistory();
+        } else if (view === 'heatmap') {
+            this.initializeHeatmap();
         }
     }
 
@@ -820,6 +824,126 @@ class TaskManager {
         }
         return { streak };
     }
+
+    // --- NOUVELLES FONCTIONS POUR LA HEATMAP ---
+
+    initializeHeatmap() {
+        const currentYear = new Date().getFullYear();
+        if (this.heatmapYearSelect.options.length === 0) {
+            for (let year = currentYear + 1; year >= 2020; year--) {
+                const option = new Option(year, year);
+                this.heatmapYearSelect.add(option);
+            }
+        }
+        this.heatmapYearSelect.value = currentYear;
+        this.loadHeatmapData();
+    }
+
+    async loadHeatmapData() {
+        const year = this.heatmapYearSelect.value;
+        try {
+            const response = await fetch(`/api/heatmap?year=${year}`);
+            if (!response.ok) throw new Error('Erreur de chargement des données de la heatmap');
+            const data = await response.json();
+            this.renderHeatmap(data, parseInt(year));
+        } catch (error) {
+            console.error('Erreur Heatmap:', error);
+            this.heatmapGrid.innerHTML = '';
+            this.noHeatmapData.style.display = 'block';
+        }
+    }
+
+    renderHeatmap(data, year) {
+        this.heatmapGrid.innerHTML = '';
+        this.noHeatmapData.style.display = 'none';
+
+        if (!data || data.length === 0) {
+            this.noHeatmapData.style.display = 'block';
+            return;
+        }
+
+        const dataMap = new Map(data.map(item => [item.date, item.completion_count]));
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'heatmap-wrapper';
+
+        const monthsContainer = document.createElement('div');
+        monthsContainer.className = 'heatmap-months';
+        wrapper.appendChild(monthsContainer);
+        
+        const weekdaysAndCells = document.createElement('div');
+        weekdaysAndCells.className = 'heatmap-graph';
+        wrapper.appendChild(weekdaysAndCells);
+
+        const weekdaysContainer = document.createElement('div');
+        weekdaysContainer.className = 'heatmap-weekdays';
+        weekdaysAndCells.appendChild(weekdaysContainer);
+
+        const cellsContainer = document.createElement('div');
+        cellsContainer.className = 'heatmap-cells';
+        weekdaysAndCells.appendChild(cellsContainer);
+
+        // --- Populate weekdays ---
+        weekdaysContainer.innerHTML = `
+            <div>L</div><div>M</div><div>M</div><div>J</div><div>V</div><div>S</div><div>D</div>
+        `;
+
+        // --- Populate cells ---
+        const startDate = new Date(year, 0, 1);
+        const endDate = new Date(year, 11, 31);
+        const dayCount = Math.round((endDate - startDate) / (1000 * 3600 * 24)) + 1;
+
+        let firstDayIndex = startDate.getDay(); // 0 = Sun
+        if (firstDayIndex === 0) {
+          firstDayIndex = 6; // We want Mon to be 0, so Sun is 6
+        } else {
+          firstDayIndex--;
+        }
+
+        for (let i = 0; i < firstDayIndex; i++) {
+            const spacer = document.createElement('div');
+            spacer.classList.add('heatmap-cell');
+            cellsContainer.appendChild(spacer);
+        }
+
+        for (let i = 0; i < dayCount; i++) {
+            const current = new Date(startDate);
+            current.setDate(current.getDate() + i);
+            const dateStr = current.toISOString().split('T')[0];
+            const count = dataMap.get(dateStr) || 0;
+            
+            let level = 0;
+            if (count > 0) level = 1;
+            if (count >= 2) level = 2;
+            if (count >= 4) level = 3;
+            if (count >= 6) level = 4;
+
+            const cell = document.createElement('div');
+            cell.className = `heatmap-cell level-${level}`;
+            cell.title = `${count} tâche(s) complétée(s) le ${current.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+            cellsContainer.appendChild(cell);
+        }
+        
+        // --- Populate months ---
+        const monthNames = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+        let currentMonth = -1;
+        
+        // Ajustement pour le calcul de la semaine des mois
+        for (let week = 0; week < 53; week++) {
+            const firstDayOfWeek = new Date(year, 0, 1 + week * 7 - firstDayIndex);
+            if(firstDayOfWeek > new Date(year, 11, 31)) break;
+
+            if (firstDayOfWeek.getFullYear() === year && firstDayOfWeek.getMonth() !== currentMonth) {
+                currentMonth = firstDayOfWeek.getMonth();
+                const monthLabel = document.createElement('div');
+                monthLabel.textContent = monthNames[currentMonth];
+                monthLabel.style.gridColumn = week + 1;
+                monthsContainer.appendChild(monthLabel);
+            }
+        }
+
+        this.heatmapGrid.appendChild(wrapper);
+    }
 }
 
 // Styles pour les animations et éléments de gamification
@@ -998,6 +1122,87 @@ style.textContent = `
     .slider.round:before {
         border-radius: 50%;
     }
+
+    /* --- NOUVEAUX STYLES POUR LA HEATMAP --- */
+
+    #heatmapView {
+        display: none;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .heatmap-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .heatmap-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .heatmap-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        overflow-x: auto;
+        padding: 5px;
+    }
+
+    .heatmap-month {
+        display: flex;
+        gap: 10px;
+    }
+
+    .heatmap-month-title {
+        width: 35px;
+        font-size: 0.8rem;
+        color: #718096;
+        text-align: right;
+        flex-shrink: 0;
+        margin-top: 20px;
+    }
+    
+    .heatmap-days-container {
+        display: grid;
+        grid-auto-flow: column;
+        grid-template-rows: repeat(7, 1fr);
+        gap: 3px;
+    }
+
+    .heatmap-cell {
+        width: 16px;
+        height: 16px;
+        background-color: #ebedf0;
+        border-radius: 3px;
+        border: 1px solid rgba(27, 31, 35, 0.06);
+    }
+    
+    .heatmap-cell.spacer {
+        background-color: transparent;
+        border: none;
+    }
+
+    .heatmap-cell.level-1 { background-color: #9be9a8; }
+    .heatmap-cell.level-2 { background-color: #40c463; }
+    .heatmap-cell.level-3 { background-color: #30a14e; }
+    .heatmap-cell.level-4 { background-color: #216e39; }
+
+    .heatmap-legend {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        justify-content: flex-end;
+        font-size: 0.8rem;
+        color: #586069;
+        margin-top: 10px;
+    }
+    .heatmap-legend .legend-cell {
+        border: 1px solid rgba(27, 31, 35, 0.1);
+    }
+    .heatmap-legend .level-0 { background-color: #ebedf0; }
 `;
 document.head.appendChild(style);
 
