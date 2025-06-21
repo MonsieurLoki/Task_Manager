@@ -170,6 +170,18 @@ class TaskManager {
         this.statsView.style.display = view === 'stats' ? 'flex' : 'none';
         
         if (view === 'history') {
+            // Récupère la semaine actuellement affichée dans la vue quotidienne
+            const weekStart = this.currentWeekStart;
+            const weekEnd = this.getWeekEnd(weekStart);
+            
+            // Applique ces dates aux champs de la vue historique
+            this.historyStartDate.value = weekStart.toISOString().split('T')[0];
+            this.historyEndDate.value = weekEnd.toISOString().split('T')[0];
+            
+            // Met à jour les contraintes du calendrier (important)
+            this.updateHistoryDateLimits('start');
+
+            // Charge l'historique pour cette nouvelle période
             this.loadHistory();
         } else if (view === 'heatmap') {
             this.initializeHeatmap();
