@@ -286,6 +286,7 @@ class TaskManager {
             }
         });
         
+        const todayStr = new Date().toISOString().split('T')[0];
         const dates = this.generateDateRange(startDate, endDate);
         
         let tableHTML = `
@@ -293,7 +294,10 @@ class TaskManager {
                 <thead>
                     <tr>
                         <th>Tâche</th>
-                        ${dates.map(date => `<th>${this.formatDateForTable(date)}</th>`).join('')}
+                        ${dates.map(date => {
+                            const isCurrentDay = date === todayStr;
+                            return `<th class="${isCurrentDay ? 'current-day-header' : ''}">${this.formatDateForTable(date)}</th>`;
+                        }).join('')}
                         <th>Objectif %</th>
                     </tr>
                 </thead>
@@ -303,27 +307,34 @@ class TaskManager {
         tasksToRender.forEach(task => {
             const validationsInPeriod = task.validations.filter(v => v.date >= startDate && v.date <= endDate);
             const completedCount = validationsInPeriod.filter(v => v.status === 2).length;
-            let percentageText = 'N/A';
+            let percentageText = '-';
+            let progressText = ''; // Pour afficher (3/5)
 
             if (task.target_frequency) {
-                const totalAttempts = validationsInPeriod.length;
-                const denominator = Math.max(task.target_frequency, totalAttempts);
-                const percentage = denominator > 0 ? Math.round((completedCount / denominator) * 100) : 0;
-                percentageText = `${percentage}%`;
+                let percentage = task.target_frequency > 0 ? (completedCount / task.target_frequency) * 100 : 0;
+                percentage = Math.min(percentage, 100);
+                percentageText = `${Math.round(percentage)}%`;
+                progressText = `<span class="history-progress">(${completedCount}/${task.target_frequency})</span>`;
             }
 
             tableHTML += `<tr>
-                <td class="task-name">${this.escapeHtml(task.name)}</td>
+                <td class="task-name">${this.escapeHtml(task.name)} ${progressText}</td>
                 ${dates.map(date => {
                     const validation = task.validations.find(v => v.date === date);
-                    if (!validation) return '<td class="status-cell"><span class="status-indicator empty">-</span></td>';
-                    const statusClass = this.getStatusClass(validation.status);
-                    const statusText = this.getStatusText(validation.status);
-                    let cellContent = `<span class="status-indicator ${statusClass}">${statusText}</span>`;
-                    if (validation.note) {
-                        cellContent += `<div class="note-tooltip">📝<span class="tooltip-text">${this.escapeHtml(validation.note)}</span></div>`;
+                    const isCurrentDay = date === todayStr;
+                    let cellContent;
+
+                    if (!validation) {
+                        cellContent = '<span class="status-indicator empty">-</span>';
+                    } else {
+                        const statusClass = this.getStatusClass(validation.status);
+                        const statusText = this.getStatusText(validation.status);
+                        cellContent = `<span class="status-indicator ${statusClass}">${statusText}</span>`;
+                        if (validation.note) {
+                            cellContent += `<div class="note-tooltip">📝<span class="tooltip-text">${this.escapeHtml(validation.note)}</span></div>`;
+                        }
                     }
-                    return `<td class="status-cell">${cellContent}</td>`;
+                    return `<td class="status-cell ${isCurrentDay ? 'current-day-cell' : ''}">${cellContent}</td>`;
                 }).join('')}
                 <td class="percentage-cell">${percentageText}</td>
             </tr>`;
@@ -600,8 +611,7 @@ class TaskManager {
     }
 
     renderTasks() {
-        const tasks = Array.from(this.tasksMap.values()); // Utilise la "mémoire" centrale
-
+        const tasks = Array.from(this.tasksMap.values());
         if (tasks.length === 0) {
             this.tasksList.innerHTML = '';
             this.tasksList.style.display = 'none';
@@ -619,25 +629,27 @@ class TaskManager {
             current.setDate(current.getDate() + 1);
         }
 
-        const todayStr = new Date().toISOString().split('T')[0]; // CORRECTION: date en string
+        const todayStr = new Date().toISOString().split('T')[0];
 
         this.tasksList.innerHTML = tasks.map(task => {
             const taskValidations = weekDates.map(date => {
                 const dateStr = date.toISOString().split('T')[0];
                 const validation = task.validations[dateStr];
-                const isFutureDate = dateStr > todayStr; // CORRECTION: comparaison de strings
+                const isFutureDate = dateStr > todayStr;
+                const isCurrentDay = dateStr === todayStr;
                 
                 return {
                     date: dateStr,
                     status: validation ? validation.status : null,
                     note: validation ? validation.note : null,
                     displayDate: date.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit' }),
-                    isFutureDate: isFutureDate
+                    isFutureDate: isFutureDate,
+                    isCurrentDay: isCurrentDay
                 };
             });
 
             const progress = this.calculateProgress(task);
-            const streakInfo = this.calculateStreak(task); // Maintenant correct grâce à la "mémoire"
+            const streakInfo = this.calculateStreak(task);
 
             return `
                 <div class="task-item" data-id="${task.id}">
@@ -654,7 +666,7 @@ class TaskManager {
                             const statusClass = v.status !== null ? this.getStatusClass(v.status) : 'empty';
                             const isClickable = !v.isFutureDate;
                             return `
-                                <div class="day-validation">
+                                <div class="day-validation ${v.isCurrentDay ? 'current-day' : ''}">
                                     <div class="day-label">${v.displayDate}</div>
                                     <div class="task-checkbox ${statusClass} ${!isClickable ? 'future-date' : ''}" 
                                          ${isClickable ? `onclick="taskManager.openValidationModal(${task.id}, '${v.date}')"` : ''}
@@ -881,6 +893,32 @@ style.textContent = `
     .task-checkbox.future-date:hover {
         background-color: #f7fafc;
         transform: none;
+    }
+
+    /* --- NOUVEAUX STYLES --- */
+
+    /* Vue Quotidienne - Surlignage du jour actuel */
+    .day-validation.current-day .day-label {
+        font-weight: 700;
+        color: #4299e1; /* Bleu pour attirer l'oeil */
+    }
+
+    /* Vue Historique - Surlignage de la colonne du jour actuel */
+    .history-table .current-day-header {
+        background-color: #ebf8ff;
+        color: #2c5282;
+    }
+
+    .history-table .current-day-cell {
+        background-color: #ebf8ff;
+    }
+
+    /* Vue Historique - Texte de progression à côté du nom de la tâche */
+    .history-progress {
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #718096; /* Gris discret */
+        margin-left: 8px;
     }
 `;
 document.head.appendChild(style);
