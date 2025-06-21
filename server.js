@@ -37,6 +37,15 @@ function initializeDb() {
                 UNIQUE(task_id, date)
             )
         `);
+        db.run(`
+            CREATE TABLE IF NOT EXISTS today_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                date TEXT NOT NULL,
+                completed BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
         console.log("Tables de la base de données initialisées.");
     });
 }
@@ -194,6 +203,70 @@ app.get('/api/statistics', (req, res) => {
         }
         stats.taskSuccess = rows;
         res.json(stats);
+    });
+});
+
+// Routes pour les tâches ponctuelles d'aujourd'hui
+app.post('/api/today-tasks', (req, res) => {
+    const { name, date } = req.body;
+    if (!name || !date) {
+        return res.status(400).json({ error: 'Le nom et la date sont requis' });
+    }
+    
+    const query = `INSERT INTO today_tasks (name, date) VALUES (?, ?)`;
+    db.run(query, [name, date], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.status(201).json({ id: this.lastID, name, date, completed: false });
+    });
+});
+
+app.get('/api/today-tasks', (req, res) => {
+    const { date } = req.query;
+    if (!date) {
+        return res.status(400).json({ error: 'La date est requise' });
+    }
+    
+    const query = `SELECT * FROM today_tasks WHERE date = ? ORDER BY created_at ASC`;
+    db.all(query, [date], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
+});
+
+app.put('/api/today-tasks/:id/toggle', (req, res) => {
+    const { id } = req.params;
+    
+    const query = `
+        UPDATE today_tasks 
+        SET completed = CASE WHEN completed = 1 THEN 0 ELSE 1 END 
+        WHERE id = ?
+    `;
+    db.run(query, [id], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Tâche non trouvée' });
+        }
+        res.json({ message: 'Statut modifié' });
+    });
+});
+
+app.delete('/api/today-tasks/:id', (req, res) => {
+    const { id } = req.params;
+    
+    db.run('DELETE FROM today_tasks WHERE id = ?', [id], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Tâche non trouvée' });
+        }
+        res.status(204).send();
     });
 });
 

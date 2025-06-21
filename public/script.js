@@ -124,6 +124,12 @@ class TaskManager {
         this.statsView = document.getElementById('statsView');
         this.noStatsData = document.getElementById('noStatsData');
         this.taskSuccessChart = null;
+
+        // Tâches ponctuelles d'aujourd'hui
+        this.todayTaskForm = document.getElementById('todayTaskForm');
+        this.todayTaskNameInput = document.getElementById('todayTaskName');
+        this.todayTasksList = document.getElementById('todayTasksList');
+        this.noTodayTasksDiv = document.getElementById('noTodayTasks');
     }
 
     bindEvents() {
@@ -145,6 +151,9 @@ class TaskManager {
 
         // Formulaire d'ajout
         this.taskForm.addEventListener('submit', (e) => this.handleAddTask(e));
+
+        // Formulaire des tâches ponctuelles d'aujourd'hui
+        this.todayTaskForm.addEventListener('submit', (e) => this.handleAddTodayTask(e));
 
         // Vue historique
         this.loadHistoryBtn.addEventListener('click', () => this.loadHistory());
@@ -281,26 +290,23 @@ class TaskManager {
 
     async initializeTasks() {
         try {
-            // 1. Charger toutes les tâches de base
-            const tasksResponse = await fetch('/api/tasks');
-            if (!tasksResponse.ok) throw new Error('Impossible de charger les tâches de base');
-            const tasks = await tasksResponse.json();
-
-            this.tasksMap.clear();
+            const response = await fetch('/api/tasks');
+            if (!response.ok) throw new Error('Erreur lors du chargement des tâches');
+            
+            const tasks = await response.json();
             tasks.forEach(task => {
                 this.tasksMap.set(task.id, { ...task, validations: {} });
             });
-
-            // 2. Charger les validations pour la semaine initiale
-            await this.loadValidationsForCurrentWeek();
             
-            // 3. Afficher le résultat
+            await this.loadValidationsForCurrentWeek();
             this.renderTasks();
             this.updateStats();
-
+            
+            // Charger les tâches d'aujourd'hui
+            this.loadTodayTasks();
         } catch (error) {
             console.error('Erreur initialisation:', error);
-            this.showNotification("Erreur critique au chargement de l'application", 'error');
+            this.showNotification('Erreur lors du chargement des tâches', 'error');
         }
     }
 
@@ -501,6 +507,97 @@ class TaskManager {
             this.updateStats();
             this.taskForm.reset();
             this.showNotification('Tâche ajoutée avec succès', 'success');
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    // Gestion des tâches ponctuelles d'aujourd'hui
+    async handleAddTodayTask(e) {
+        e.preventDefault();
+        
+        const name = this.todayTaskNameInput.value.trim();
+        if (!name) return;
+
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const response = await fetch('/api/today-tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, date: today })
+            });
+
+            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
+            
+            this.todayTaskNameInput.value = '';
+            this.loadTodayTasks();
+            this.showNotification('Tâche du jour ajoutée', 'success');
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    async loadTodayTasks() {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const response = await fetch(`/api/today-tasks?date=${today}`);
+            
+            if (!response.ok) throw new Error('Erreur lors du chargement');
+            
+            const todayTasks = await response.json();
+            this.renderTodayTasks(todayTasks);
+        } catch (error) {
+            console.error('Erreur chargement tâches du jour:', error);
+            this.renderTodayTasks([]);
+        }
+    }
+
+    renderTodayTasks(tasks) {
+        if (tasks.length === 0) {
+            this.todayTasksList.innerHTML = '';
+            this.noTodayTasksDiv.style.display = 'block';
+            return;
+        }
+
+        this.noTodayTasksDiv.style.display = 'none';
+        this.todayTasksList.innerHTML = tasks.map(task => `
+            <div class="today-task-item ${task.completed ? 'completed' : ''}" data-id="${task.id}">
+                <div class="today-task-checkbox ${task.completed ? 'completed' : ''}" onclick="taskManager.toggleTodayTask(${task.id})"></div>
+                <div class="today-task-text">${this.escapeHtml(task.name)}</div>
+                <button class="today-task-delete" onclick="taskManager.deleteTodayTask(${task.id})" title="Supprimer">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    async toggleTodayTask(taskId) {
+        try {
+            const response = await fetch(`/api/today-tasks/${taskId}/toggle`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) throw new Error('Erreur lors de la modification');
+            
+            this.loadTodayTasks();
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    async deleteTodayTask(taskId) {
+        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return;
+
+        try {
+            const response = await fetch(`/api/today-tasks/${taskId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) throw new Error('Erreur lors de la suppression');
+            
+            this.loadTodayTasks();
+            this.showNotification('Tâche supprimée', 'success');
         } catch (error) {
             this.showNotification(error.message, 'error');
         }
