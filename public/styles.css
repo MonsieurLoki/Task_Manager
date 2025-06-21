@@ -327,6 +327,96 @@ body {
     }
 }
 
+/* Panneau de contenu avec sélecteur */
+.content-panel {
+    display: flex;
+    position: relative;
+    height: calc(100vh - 250px);
+    min-height: 450px;
+}
+
+/* Sélecteur vertical */
+.view-selector {
+    display: none; /* Caché par défaut */
+    flex-direction: column;
+    gap: 8px;
+    position: fixed;
+    right: 30px; /* Positionné par rapport au bord de la fenêtre */
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1000;
+}
+
+body.daily-view-active .view-selector {
+    display: flex; /* Affiché uniquement sur la vue quotidienne */
+}
+
+.view-selector-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-primary);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 80px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px var(--shadow-primary);
+}
+
+.view-selector-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px var(--shadow-primary);
+    border-color: var(--border-secondary);
+}
+
+.view-selector-btn.active {
+    background: var(--border-focus);
+    border-color: var(--border-focus);
+    color: white;
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px var(--shadow-secondary);
+}
+
+.view-selector-btn i {
+    font-size: 1.2rem;
+}
+
+.view-selector-btn span {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* Conteneur des vues */
+.view-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+}
+
+.view-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transform: translateX(20px);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+.view-panel.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: all;
+}
+
 /* Formulaire de tâche */
 .task-form-container {
     background: var(--bg-secondary);
@@ -379,6 +469,54 @@ body {
     min-height: 80px;
 }
 
+/* Container des tâches */
+.tasks-container {
+    background: var(--bg-secondary);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 8px 32px var(--shadow-primary);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.tasks-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.tasks-header h2 {
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+}
+
+.stats {
+    background: var(--bg-gradient);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* Liste des tâches */
+.tasks-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding-right: 5px;
+    margin-bottom: 0;
+}
+
 /* Section des tâches ponctuelles d'aujourd'hui */
 .today-tasks-container {
     background: var(--bg-secondary);
@@ -386,21 +524,35 @@ body {
     border-radius: 15px;
     padding: 25px;
     box-shadow: 0 8px 32px var(--shadow-primary);
-    height: fit-content;
-    margin-bottom: 20px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
-.today-tasks-container h3 {
-    color: var(--text-secondary);
+.today-tasks-header {
     margin-bottom: 20px;
+    flex-shrink: 0;
+}
+
+.today-tasks-header h2 {
+    color: var(--text-secondary);
+    font-size: 1.5rem;
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 1.2rem;
+}
+
+.today-tasks-header h2::before {
+    content: '\f133';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    color: var(--border-focus);
 }
 
 .today-task-form {
     margin-bottom: 20px;
+    flex-shrink: 0;
 }
 
 .today-task-form .form-group {
@@ -432,11 +584,13 @@ body {
 }
 
 .today-tasks-list {
+    flex: 1;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 300px;
     overflow-y: auto;
+    padding-right: 5px;
+    margin-bottom: 0;
 }
 
 .today-task-item {
@@ -524,6 +678,60 @@ body {
 
 /* Responsive pour les tâches d'aujourd'hui */
 @media (max-width: 768px) {
+    .content-panel {
+        flex-direction: column;
+        gap: 15px;
+        height: auto;
+        min-height: auto;
+        position: relative;
+    }
+    
+    .view-selector {
+        position: static;
+        transform: none;
+        flex-direction: row;
+        justify-content: center;
+        gap: 10px;
+        order: -1;
+        margin-bottom: 15px;
+    }
+    
+    .view-selector-btn {
+        flex-direction: row;
+        min-width: auto;
+        padding: 10px 16px;
+    }
+    
+    .view-selector-btn span {
+        font-size: 0.9rem;
+    }
+    
+    .view-content {
+        min-height: 400px;
+        height: auto;
+        padding-right: 0;
+    }
+    
+    .view-panel {
+        position: relative;
+        opacity: 1;
+        transform: none;
+        pointer-events: all;
+        display: none;
+        height: auto;
+    }
+    
+    .view-panel.active {
+        display: block;
+    }
+    
+    .tasks-container,
+    .today-tasks-container {
+        height: auto;
+        min-height: 400px;
+        overflow: visible;
+    }
+    
     .today-task-form .form-group {
         flex-direction: column;
         align-items: stretch;
@@ -539,40 +747,8 @@ body {
     }
     
     .today-tasks-list {
-        max-height: 200px;
+        max-height: 300px;
     }
-}
-
-/* Container des tâches */
-.tasks-container {
-    background: var(--bg-secondary);
-    backdrop-filter: blur(10px);
-    border-radius: 15px;
-    padding: 25px;
-    box-shadow: 0 8px 32px var(--shadow-primary);
-}
-
-.tasks-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.tasks-header h2 {
-    color: var(--text-secondary);
-    font-size: 1.5rem;
-}
-
-.stats {
-    background: var(--bg-gradient);
-    color: white;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-weight: 600;
-    font-size: 0.9rem;
 }
 
 /* Liste des tâches */

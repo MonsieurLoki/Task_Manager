@@ -68,45 +68,58 @@
                     </form>
                 </div>
 
-                <!-- Section des tâches ponctuelles d'aujourd'hui -->
-                <div class="today-tasks-container">
-                    <h3><i class="fas fa-calendar-day"></i> Tâches pour aujourd'hui</h3>
-                    <form id="todayTaskForm" class="today-task-form">
-                        <div class="form-group">
-                            <input type="text" id="todayTaskName" placeholder="Nouvelle tâche pour aujourd'hui..." required>
-                            <button type="submit" class="btn-primary btn-small">
-                                <i class="fas fa-plus"></i>
-                            </button>
+                <div class="content-panel">
+                    <!-- Conteneur pour les vues -->
+                    <div class="view-content">
+                        <!-- Vue Tâches de la semaine -->
+                        <div id="weekView" class="view-panel active">
+                            <div class="tasks-container">
+                                <div class="tasks-header">
+                                    <h2>Tâches de la semaine</h2>
+                                    <div class="stats">
+                                        <span id="completedCount">0</span> / <span id="totalCount">0</span> validées
+                                    </div>
+                                </div>
+
+                                <div id="tasksList" class="tasks-list">
+                                    <!-- Les tâches seront ajoutées ici dynamiquement -->
+                                </div>
+
+                                <div id="noTasks" class="no-tasks" style="display: none;">
+                                    <i class="fas fa-clipboard-list"></i>
+                                    <p>Aucune tâche récurrente définie</p>
+                                    <p>Ajoutez votre première tâche quotidienne ci-dessus !</p>
+                                </div>
+                            </div>
                         </div>
-                    </form>
-                    
-                    <div id="todayTasksList" class="today-tasks-list">
-                        <!-- Les tâches ponctuelles seront ajoutées ici dynamiquement -->
-                    </div>
-                    
-                    <div id="noTodayTasks" class="no-tasks" style="display: none;">
-                        <i class="fas fa-check-circle"></i>
-                        <p>Aucune tâche ponctuelle pour aujourd'hui</p>
-                        <p>Ajoutez vos tâches du jour ci-dessus !</p>
-                    </div>
-                </div>
 
-                <div class="tasks-container">
-                    <div class="tasks-header">
-                        <h2>Tâches de la semaine</h2>
-                        <div class="stats">
-                            <span id="completedCount">0</span> / <span id="totalCount">0</span> validées
+                        <!-- Vue Tâches d'aujourd'hui -->
+                        <div id="todayView" class="view-panel">
+                            <div class="today-tasks-container">
+                                <div class="today-tasks-header">
+                                    <h2>Tâches pour aujourd'hui</h2>
+                                </div>
+                                
+                                <form id="todayTaskForm" class="today-task-form">
+                                    <div class="form-group">
+                                        <input type="text" id="todayTaskName" placeholder="Nouvelle tâche pour aujourd'hui..." required>
+                                        <button type="submit" class="btn-primary btn-small">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                </form>
+                                
+                                <div id="todayTasksList" class="today-tasks-list">
+                                    <!-- Les tâches ponctuelles seront ajoutées ici dynamiquement -->
+                                </div>
+                                
+                                <div id="noTodayTasks" class="no-tasks" style="display: none;">
+                                    <i class="fas fa-check-circle"></i>
+                                    <p>Aucune tâche ponctuelle pour aujourd'hui</p>
+                                    <p>Ajoutez vos tâches du jour ci-dessus !</p>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-
-                    <div id="tasksList" class="tasks-list">
-                        <!-- Les tâches seront ajoutées ici dynamiquement -->
-                    </div>
-
-                    <div id="noTasks" class="no-tasks" style="display: none;">
-                        <i class="fas fa-clipboard-list"></i>
-                        <p>Aucune tâche récurrente définie</p>
-                        <p>Ajoutez votre première tâche quotidienne ci-dessus !</p>
                     </div>
                 </div>
             </div>
@@ -265,6 +278,19 @@
                 </form>
             </div>
         </div>
+        <div id="notification" class="notification"></div>
+    </div>
+
+    <!-- Sélecteur de vue flottant -->
+    <div class="view-selector">
+        <button id="weekViewBtn" class="view-selector-btn active" data-view="week">
+            <i class="fas fa-calendar-week"></i>
+            <span>Semaine</span>
+        </button>
+        <button id="todayViewBtn" class="view-selector-btn" data-view="today">
+            <i class="fas fa-calendar-day"></i>
+            <span>Aujourd'hui</span>
+        </button>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

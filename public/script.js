@@ -130,6 +130,12 @@ class TaskManager {
         this.todayTaskNameInput = document.getElementById('todayTaskName');
         this.todayTasksList = document.getElementById('todayTasksList');
         this.noTodayTasksDiv = document.getElementById('noTodayTasks');
+
+        // Sélecteur de vue
+        this.weekViewBtn = document.getElementById('weekViewBtn');
+        this.todayViewBtn = document.getElementById('todayViewBtn');
+        this.weekView = document.getElementById('weekView');
+        this.todayView = document.getElementById('todayView');
     }
 
     bindEvents() {
@@ -154,6 +160,10 @@ class TaskManager {
 
         // Formulaire des tâches ponctuelles d'aujourd'hui
         this.todayTaskForm.addEventListener('submit', (e) => this.handleAddTodayTask(e));
+
+        // Sélecteur de vue
+        this.weekViewBtn.addEventListener('click', () => this.switchContentView('week'));
+        this.todayViewBtn.addEventListener('click', () => this.switchContentView('today'));
 
         // Vue historique
         this.loadHistoryBtn.addEventListener('click', () => this.loadHistory());
@@ -218,6 +228,9 @@ class TaskManager {
     switchView(view) {
         this.currentView = view;
         
+        // Gérer la classe sur le body pour le sélecteur flottant
+        document.body.classList.toggle('daily-view-active', view === 'daily');
+
         this.dailyViewBtn.classList.toggle('active', view === 'daily');
         this.historyViewBtn.classList.toggle('active', view === 'history');
         this.heatmapViewBtn.classList.toggle('active', view === 'heatmap');
@@ -242,10 +255,28 @@ class TaskManager {
 
             // Charge l'historique pour cette nouvelle période
             this.loadHistory();
+            this.loadAndRenderStatistics();
         } else if (view === 'heatmap') {
             this.initializeHeatmap();
         } else if (view === 'stats') {
             this.loadAndRenderStatistics();
+        }
+    }
+
+    // Basculement entre les vues du contenu (semaine/aujourd'hui)
+    switchContentView(view) {
+        // Mise à jour des boutons
+        this.weekViewBtn.classList.toggle('active', view === 'week');
+        this.todayViewBtn.classList.toggle('active', view === 'today');
+        
+        // Mise à jour des panneaux
+        this.weekView.classList.toggle('active', view === 'week');
+        this.todayView.classList.toggle('active', view === 'today');
+        
+        // Animation de transition
+        if (view === 'today') {
+            // Recharger les tâches d'aujourd'hui si nécessaire
+            this.loadTodayTasks();
         }
     }
 
