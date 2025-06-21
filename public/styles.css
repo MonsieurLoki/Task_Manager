@@ -337,11 +337,11 @@ body {
 
 /* Sélecteur vertical */
 .view-selector {
-    display: none; /* Caché par défaut */
+    display: none; /* Caché par défaut, affiché via JS */
     flex-direction: column;
-    gap: 8px;
-    position: fixed;
-    right: 30px; /* Positionné par rapport au bord de la fenêtre */
+    gap: 10px;
+    position: fixed; /* Positionnement par rapport à la fenêtre */
+    right: 20px; /* Distance du bord droit de l'écran */
     top: 50%;
     transform: translateY(-50%);
     z-index: 1000;
@@ -370,7 +370,6 @@ body.daily-view-active .view-selector {
 .view-selector-btn:hover {
     transform: scale(1.05);
     box-shadow: 0 6px 20px var(--shadow-primary);
-    border-color: var(--border-secondary);
 }
 
 .view-selector-btn.active {
@@ -378,7 +377,6 @@ body.daily-view-active .view-selector {
     border-color: var(--border-focus);
     color: white;
     transform: scale(1.05);
-    box-shadow: 0 6px 20px var(--shadow-secondary);
 }
 
 .view-selector-btn i {
@@ -748,6 +746,7 @@ body.daily-view-active .view-selector {
     
     .today-tasks-list {
         max-height: 300px;
+        padding-right: 5px;
     }
 }
 
@@ -1633,4 +1632,104 @@ body {
 .toggle-thumb,
 .toggle-icon {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (max-width: 1400px) {
+    .view-selector {
+        right: 15px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .view-selector {
+        /* Pour les écrans plus petits, on cache les boutons flottants 
+           et on les remet dans le flux normal plus bas */
+        display: none;
+    }
+
+    body.daily-view-active .view-selector-mobile {
+        display: flex;
+    }
+}
+
+/* Duplication du sélecteur pour mobile, qui apparaîtra dans le flux normal */
+.view-selector-mobile {
+    display: none;
+    flex-direction: row;
+    justify-content: center;
+    gap: 10px;
+    order: -1;
+    margin-bottom: 15px;
+}
+
+@media (max-width: 768px) {
+    .content-panel {
+        flex-direction: column;
+        gap: 15px;
+        height: auto;
+        min-height: auto;
+        position: relative;
+    }
+
+    .view-selector-mobile {
+        display: flex;
+    }
+    
+    .view-selector-btn {
+        flex-direction: row;
+        min-width: auto;
+        padding: 10px 16px;
+    }
+
+    .view-selector-btn:hover,
+    .view-selector-btn.active {
+        transform: none;
+    }
+    
+    .view-selector-btn span {
+        font-size: 0.9rem;
+    }
+    
+    .view-content {
+        min-height: 400px;
+        height: auto;
+    }
+    
+    .view-panel {
+        position: relative;
+        opacity: 1;
+        transform: none;
+        pointer-events: all;
+        display: none;
+        height: auto;
+    }
+    
+    .view-panel.active {
+        display: block;
+    }
+    
+    .tasks-container,
+    .today-tasks-container {
+        height: auto;
+        min-height: 400px;
+        overflow: visible;
+    }
+    
+    .today-task-form .form-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .today-task-form .form-group input {
+        margin-bottom: 10px;
+    }
+    
+    .btn-small {
+        align-self: flex-end;
+        width: fit-content;
+    }
+    
+    .today-tasks-list {
+        max-height: 300px;
+    }
 } 

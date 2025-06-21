@@ -10,6 +10,10 @@ class TaskManager {
         this.initializeTheme();
         this.initializeElements();
         this.bindEvents();
+        
+        // Appliquer l'état de la vue initiale
+        this.switchView(this.currentView);
+        
         this.initializeTasks();
         this.updateWeekDisplay();
         this.initializeHistoryDates();
@@ -228,7 +232,7 @@ class TaskManager {
     switchView(view) {
         this.currentView = view;
         
-        // Gérer la classe sur le body pour le sélecteur flottant
+        // Ajoute une classe au body pour styler le sélecteur de vue en conséquence
         document.body.classList.toggle('daily-view-active', view === 'daily');
 
         this.dailyViewBtn.classList.toggle('active', view === 'daily');
