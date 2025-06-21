@@ -62,6 +62,7 @@ class TaskManager {
         this.closeValidationModalBtn = document.getElementById('closeValidationModal');
         this.cancelValidation = document.getElementById('cancelValidation');
         this.statusButtons = document.querySelectorAll('.status-btn');
+        this.focusModeToggle = document.getElementById('focusMode');
     }
 
     bindEvents() {
@@ -73,6 +74,7 @@ class TaskManager {
         // Changement de vue
         this.dailyViewBtn.addEventListener('click', () => this.switchView('daily'));
         this.historyViewBtn.addEventListener('click', () => this.switchView('history'));
+        this.focusModeToggle.addEventListener('change', () => this.renderTasks());
 
         // Formulaire d'ajout
         this.taskForm.addEventListener('submit', (e) => this.handleAddTask(e));
@@ -611,7 +613,20 @@ class TaskManager {
     }
 
     renderTasks() {
-        const tasks = Array.from(this.tasksMap.values());
+        let tasks = Array.from(this.tasksMap.values());
+
+        // --- Logique du Mode Focus ---
+        const isFocusMode = this.focusModeToggle.checked;
+        if (isFocusMode) {
+            tasks = tasks.filter(task => {
+                if (!task.target_frequency) {
+                    return true; // Garde les tâches sans objectif
+                }
+                const progress = this.calculateProgress(task);
+                return progress.completedCount < task.target_frequency;
+            });
+        }
+
         if (tasks.length === 0) {
             this.tasksList.innerHTML = '';
             this.tasksList.style.display = 'none';
@@ -919,6 +934,69 @@ style.textContent = `
         font-weight: 500;
         color: #718096; /* Gris discret */
         margin-left: 8px;
+    }
+
+    /* --- NOUVEAUX STYLES POUR LE MODE FOCUS --- */
+    .focus-mode-toggle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .focus-label {
+        font-weight: 600;
+        color: #4a5568;
+    }
+
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+    }
+
+    .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+    }
+
+    input:checked + .slider {
+        background-color: #48bb78; /* Vert succès */
+    }
+
+    input:checked + .slider:before {
+        transform: translateX(20px);
+    }
+
+    .slider.round {
+        border-radius: 34px;
+    }
+
+    .slider.round:before {
+        border-radius: 50%;
     }
 `;
 document.head.appendChild(style);
