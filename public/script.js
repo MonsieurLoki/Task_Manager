@@ -449,25 +449,30 @@ class TaskManager {
             const target = task.target_frequency;
             let percentage = 0;
             let proratedTarget = 0;
+            let progressText = '';
+            let percentageText = '-';
             
-            if (target > 0 && totalDaysInPeriod > 0) {
+            if (target && target > 0 && totalDaysInPeriod > 0) {
+                // Tâche avec objectif
                 proratedTarget = (target / 7) * totalDaysInPeriod;
                 percentage = proratedTarget > 0 ? (completedCount / proratedTarget) * 100 : 0;
                 percentage = Math.min(percentage, 100);
+                progressText = `(${completedCount}/${Math.round(proratedTarget)})`;
+                percentageText = `${percentage.toFixed(0)}%`;
             } else if (totalDaysInPeriod > 0) {
-                percentage = (completedCount / totalDaysInPeriod) * 100;
+                // Tâche sans objectif - pas d'affichage de progression
+                progressText = '';
+                percentageText = '-';
             }
             
-            const progressText = target ? `(Objectif: ${completedCount}/${Math.round(proratedTarget)})` : `(${completedCount}/${totalDaysInPeriod})`;
-
             tableHtml += `
                 <tr>
                     <td class="task-name">
                         ${this.escapeHtml(task.name)}
-                        <span class="history-progress">${progressText}</span>
+                        ${progressText ? `<span class="history-progress">${progressText}</span>` : ''}
                     </td>
                     ${cells}
-                    <td class="percentage-cell">${percentage.toFixed(0)}%</td>
+                    <td class="percentage-cell">${percentageText}</td>
                 </tr>
             `;
         }
