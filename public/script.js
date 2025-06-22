@@ -547,7 +547,7 @@ class TaskManager {
         }
     }
 
-    // Gestion des tâches ponctuelles d'aujourd'hui
+    // Gestion des tâches à faire
     async handleAddTodayTask(e) {
         e.preventDefault();
         
@@ -555,18 +555,17 @@ class TaskManager {
         if (!name) return;
 
         try {
-            const today = new Date().toISOString().split('T')[0];
-            const response = await fetch('/api/today-tasks', {
+            const response = await fetch('/api/todo-tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, date: today })
+                body: JSON.stringify({ name })
             });
 
             if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
             
             this.todayTaskNameInput.value = '';
             this.loadTodayTasks();
-            this.showNotification('Tâche du jour ajoutée', 'success');
+            this.showNotification('Tâche ajoutée', 'success');
         } catch (error) {
             this.showNotification(error.message, 'error');
         }
@@ -574,15 +573,14 @@ class TaskManager {
 
     async loadTodayTasks() {
         try {
-            const today = new Date().toISOString().split('T')[0];
-            const response = await fetch(`/api/today-tasks?date=${today}`);
+            const response = await fetch('/api/todo-tasks');
             
             if (!response.ok) throw new Error('Erreur lors du chargement');
             
-            const todayTasks = await response.json();
-            this.renderTodayTasks(todayTasks);
+            const tasks = await response.json();
+            this.renderTodayTasks(tasks);
         } catch (error) {
-            console.error('Erreur chargement tâches du jour:', error);
+            console.error('Erreur chargement tâches:', error);
             this.renderTodayTasks([]);
         }
     }
@@ -608,7 +606,7 @@ class TaskManager {
 
     async toggleTodayTask(taskId) {
         try {
-            const response = await fetch(`/api/today-tasks/${taskId}/toggle`, {
+            const response = await fetch(`/api/todo-tasks/${taskId}/toggle`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -625,7 +623,7 @@ class TaskManager {
         if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return;
 
         try {
-            const response = await fetch(`/api/today-tasks/${taskId}`, {
+            const response = await fetch(`/api/todo-tasks/${taskId}`, {
                 method: 'DELETE'
             });
 

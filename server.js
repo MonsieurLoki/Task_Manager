@@ -41,7 +41,6 @@ function initializeDb() {
             CREATE TABLE IF NOT EXISTS today_tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                date TEXT NOT NULL,
                 completed BOOLEAN DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -206,30 +205,25 @@ app.get('/api/statistics', (req, res) => {
     });
 });
 
-// Routes pour les tâches ponctuelles d'aujourd'hui
-app.post('/api/today-tasks', (req, res) => {
-    const { name, date } = req.body;
-    if (!name || !date) {
-        return res.status(400).json({ error: 'Le nom et la date sont requis' });
+// Routes pour les tâches à faire
+app.post('/api/todo-tasks', (req, res) => {
+    const { name } = req.body;
+    if (!name) {
+        return res.status(400).json({ error: 'Le nom de la tâche est requis' });
     }
     
-    const query = `INSERT INTO today_tasks (name, date) VALUES (?, ?)`;
-    db.run(query, [name, date], function(err) {
+    const query = `INSERT INTO today_tasks (name) VALUES (?)`;
+    db.run(query, [name], function(err) {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
-        res.status(201).json({ id: this.lastID, name, date, completed: false });
+        res.status(201).json({ id: this.lastID, name, completed: false });
     });
 });
 
-app.get('/api/today-tasks', (req, res) => {
-    const { date } = req.query;
-    if (!date) {
-        return res.status(400).json({ error: 'La date est requise' });
-    }
-    
-    const query = `SELECT * FROM today_tasks WHERE date = ? ORDER BY created_at ASC`;
-    db.all(query, [date], (err, rows) => {
+app.get('/api/todo-tasks', (req, res) => {
+    const query = `SELECT * FROM today_tasks ORDER BY created_at ASC`;
+    db.all(query, [], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -237,7 +231,7 @@ app.get('/api/today-tasks', (req, res) => {
     });
 });
 
-app.put('/api/today-tasks/:id/toggle', (req, res) => {
+app.put('/api/todo-tasks/:id/toggle', (req, res) => {
     const { id } = req.params;
     
     const query = `
@@ -256,7 +250,7 @@ app.put('/api/today-tasks/:id/toggle', (req, res) => {
     });
 });
 
-app.delete('/api/today-tasks/:id', (req, res) => {
+app.delete('/api/todo-tasks/:id', (req, res) => {
     const { id } = req.params;
     
     db.run('DELETE FROM today_tasks WHERE id = ?', [id], function(err) {
