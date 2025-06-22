@@ -99,6 +99,29 @@ body {
     margin-bottom: 20px;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-email {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.btn-small {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
 .header h1 {
     color: var(--text-secondary);
     font-size: 2rem;
@@ -1038,7 +1061,7 @@ body.daily-view-active .view-selector {
 }
 
 .history-table .status-cell {
-    text-align: center;
+    position: relative;
 }
 
 .percentage-cell {
@@ -1081,21 +1104,29 @@ body.daily-view-active .view-selector {
 /* Tooltip pour les notes */
 .note-tooltip {
     position: relative;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: help;
-    margin-left: 5px;
+}
+
+.week-validations .note-tooltip {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    font-size: 12px;
 }
 
 .note-tooltip .tooltip-text {
     visibility: hidden;
-    width: 220px;
+    width: 200px;
     background-color: var(--text-primary);
     color: var(--bg-primary);
     text-align: left;
     border-radius: 6px;
     padding: 8px;
     position: absolute;
-    z-index: 1;
+    z-index: 10;
     bottom: 140%;
     left: 50%;
     margin-left: -110px;
@@ -1117,7 +1148,7 @@ body.daily-view-active .view-selector {
     margin-left: -5px;
     border-width: 5px;
     border-style: solid;
-    border-color: var(--text-primary) transparent transparent transparent;
+    border-color: #555 transparent transparent transparent;
 }
 
 /* Modal de validation */

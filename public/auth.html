@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - Gestionnaire de Tâches</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: var(--bg-color);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .auth-header {
+            margin-bottom: 30px;
+        }
+
+        .auth-header h1 {
+            color: var(--text-color);
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        .auth-header p {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            background: var(--border-color);
+            padding: 5px;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .auth-tab.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .auth-form {
+            display: none;
+        }
+
+        .auth-form.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-color);
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .auth-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            margin-bottom: 15px;
+        }
+
+        .auth-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .auth-btn:disabled {
+            background: var(--border-color);
+            cursor: not-allowed;
+        }
+
+        .auth-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-link:hover {
+            text-decoration: underline;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #fcc;
+        }
+
+        .success-message {
+            background: #efe;
+            color: #363;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #cfc;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1><i class="fas fa-calendar-check"></i> Task Manager</h1>
+                <p>Gérez vos tâches quotidiennes efficacement</p>
+            </div>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" onclick="switchTab('login')">Connexion</button>
+                <button class="auth-tab" onclick="switchTab('signup')">Inscription</button>
+            </div>
+
+            <!-- Formulaire de connexion -->
+            <form id="loginForm" class="auth-form active">
+                <div id="loginError" class="error-message" style="display: none;"></div>
+                
+                <div class="form-group">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="loginPassword">Mot de passe</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                
+                <button type="submit" class="auth-btn" id="loginBtn">
+                    <span class="btn-text">Se connecter</span>
+                    <span class="loading" style="display: none;"></span>
+                </button>
+                
+                <p>
+                    <a href="#" class="auth-link" onclick="switchTab('signup')">
+                        Pas encore de compte ? S'inscrire
+                    </a>
+                </p>
+            </form>
+
+            <!-- Formulaire d'inscription -->
+            <form id="signupForm" class="auth-form">
+                <div id="signupError" class="error-message" style="display: none;"></div>
+                <div id="signupSuccess" class="success-message" style="display: none;"></div>
+                
+                <div class="form-group">
+                    <label for="signupEmail">Email</label>
+                    <input type="email" id="signupEmail" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="signupPassword">Mot de passe</label>
+                    <input type="password" id="signupPassword" required minlength="6">
+                </div>
+                
+                <div class="form-group">
+                    <label for="signupConfirmPassword">Confirmer le mot de passe</label>
+                    <input type="password" id="signupConfirmPassword" required>
+                </div>
+                
+                <button type="submit" class="auth-btn" id="signupBtn">
+                    <span class="btn-text">S'inscrire</span>
+                    <span class="loading" style="display: none;"></span>
+                </button>
+                
+                <p>
+                    <a href="#" class="auth-link" onclick="switchTab('login')">
+                        Déjà un compte ? Se connecter
+                    </a>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="auth.js"></script>
+</body>
+</html> 
