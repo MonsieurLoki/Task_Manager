@@ -12,18 +12,19 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: var(--bg-gradient);
             padding: 20px;
         }
 
         .auth-card {
-            background: var(--bg-color);
+            background: var(--bg-secondary);
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             padding: 40px;
             width: 100%;
             max-width: 400px;
             text-align: center;
+            border: 1px solid var(--border-primary);
         }
 
         .auth-header {
@@ -31,13 +32,13 @@
         }
 
         .auth-header h1 {
-            color: var(--text-color);
+            color: var(--text-primary);
             margin-bottom: 10px;
             font-size: 2rem;
         }
 
         .auth-header p {
-            color: var(--text-muted);
+            color: var(--text-secondary);
             font-size: 1rem;
         }
 
@@ -45,7 +46,7 @@
             display: flex;
             margin-bottom: 30px;
             border-radius: 10px;
-            background: var(--border-color);
+            background: var(--bg-primary);
             padding: 5px;
         }
 
@@ -54,7 +55,7 @@
             padding: 12px;
             border: none;
             background: transparent;
-            color: var(--text-muted);
+            color: var(--text-secondary);
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -62,7 +63,7 @@
         }
 
         .auth-tab.active {
-            background: var(--primary-color);
+            background: var(--info-color);
             color: white;
         }
 
@@ -106,19 +107,19 @@
         .auth-btn {
             width: 100%;
             padding: 12px;
-            background: var(--primary-color);
+            background: var(--info-color);
             color: white;
             border: none;
             border-radius: 8px;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.3s ease;
+            transition: all 0.3s ease;
             margin-bottom: 15px;
         }
 
         .auth-btn:hover {
-            background: var(--primary-hover);
+            filter: brightness(1.1);
         }
 
         .auth-btn:disabled {
@@ -127,7 +128,7 @@
         }
 
         .auth-link {
-            color: var(--primary-color);
+            color: var(--info-color);
             text-decoration: none;
             font-weight: 500;
         }
