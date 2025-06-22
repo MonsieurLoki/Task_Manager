@@ -594,6 +594,7 @@ class TaskManager {
         if (tasks.length === 0) {
             this.todayTasksList.innerHTML = '';
             this.noTodayTasksDiv.style.display = 'block';
+            this.updateNotificationBadge(0);
             return;
         }
 
@@ -607,6 +608,22 @@ class TaskManager {
                 </button>
             </div>
         `).join('');
+
+        // Mettre à jour la pastille de notification
+        const uncompletedCount = tasks.filter(task => !task.completed).length;
+        this.updateNotificationBadge(uncompletedCount);
+    }
+
+    updateNotificationBadge(count) {
+        const badge = document.getElementById('todoNotificationBadge');
+        if (!badge) return;
+
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
     }
 
     async toggleTodayTask(taskId) {
