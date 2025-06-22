@@ -6,17 +6,52 @@ class TaskManager {
         this.validatingTaskId = null;
         this.selectedStatus = null;
         this.currentView = 'daily';
+        this.currentUser = null;
+        this.todayTasks = [];
         
-        this.initializeTheme();
-        this.initializeElements();
-        this.bindEvents();
-        
-        // Appliquer l'état de la vue initiale
-        this.switchView(this.currentView);
-        
-        this.initializeTasks();
-        this.updateWeekDisplay();
-        this.initializeHistoryDates();
+        // Initialiser l'authentification avant tout
+        this.initializeAuth();
+    }
+
+    // Initialisation de l'authentification
+    async initializeAuth() {
+        try {
+            // Vérifier si l'utilisateur est connecté
+            const { data: { user }, error } = await supabase.auth.getUser();
+            
+            if (error || !user) {
+                // Rediriger vers la page de connexion
+                window.location.href = 'auth.html';
+                return;
+            }
+            
+            this.currentUser = user;
+            this.displayUserInfo();
+            
+            // Initialiser l'application
+            this.initializeTheme();
+            this.initializeElements();
+            this.bindEvents();
+            
+            // Appliquer l'état de la vue initiale
+            this.switchView(this.currentView);
+            
+            this.initializeTasks();
+            this.updateWeekDisplay();
+            this.initializeHistoryDates();
+            
+        } catch (error) {
+            console.error('Erreur lors de l\'initialisation de l\'authentification:', error);
+            window.location.href = 'auth.html';
+        }
+    }
+
+    // Afficher les informations de l'utilisateur
+    displayUserInfo() {
+        const userEmailElement = document.getElementById('userEmail');
+        if (userEmailElement && this.currentUser) {
+            userEmailElement.textContent = this.currentUser.email;
+        }
     }
 
     // Gestion du thème
@@ -190,6 +225,12 @@ class TaskManager {
             btn.addEventListener('click', () => this.selectStatus(btn));
         });
 
+        // Déconnexion
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => this.handleLogout());
+        }
+
         // Fermer modals en cliquant à l'extérieur
         this.editModal.addEventListener('click', (e) => {
             if (e.target === this.editModal) {
@@ -212,6 +253,47 @@ class TaskManager {
                 if (this.validationModal.classList.contains('show')) {
                     this.closeValidationModal();
                 }
+            }
+        });
+
+        // Event delegation pour les clics sur les cases de validation
+        this.tasksList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('task-checkbox')) {
+                const taskId = e.target.dataset.taskId;
+                const date = e.target.dataset.date;
+                const isClickable = e.target.dataset.clickable === 'true';
+                
+                if (isClickable && taskId && date) {
+                    this.openValidationModal(taskId, date);
+                }
+            }
+            
+            // Gestion des boutons d'action
+            if (e.target.closest('.action-btn')) {
+                const button = e.target.closest('.action-btn');
+                const taskId = button.dataset.taskId;
+                
+                if (button.classList.contains('edit')) {
+                    this.openEditModal(taskId);
+                } else if (button.classList.contains('delete')) {
+                    this.deleteTask(taskId);
+                }
+            }
+        });
+
+        // Event delegation pour la liste des tâches d'aujourd'hui
+        this.todayTasksList.addEventListener('click', e => {
+            const checkbox = e.target.closest('.today-task-checkbox');
+            if (checkbox) {
+                const taskId = checkbox.dataset.taskId;
+                if (taskId) this.toggleTodayTask(taskId);
+                return;
+            }
+
+            const deleteBtn = e.target.closest('.today-task-delete');
+            if (deleteBtn) {
+                const taskId = deleteBtn.dataset.taskId;
+                if (taskId) this.deleteTodayTask(taskId);
             }
         });
     }
@@ -251,8 +333,8 @@ class TaskManager {
             const weekEnd = this.getWeekEnd(weekStart);
             
             // Applique ces dates aux champs de la vue historique
-            this.historyStartDate.value = weekStart.toISOString().split('T')[0];
-            this.historyEndDate.value = weekEnd.toISOString().split('T')[0];
+            this.historyStartDate.value = this.formatDateForInput(weekStart);
+            this.historyEndDate.value = this.formatDateForInput(weekEnd);
             
             // Met à jour les contraintes du calendrier (important)
             this.updateHistoryDateLimits('start');
@@ -325,10 +407,14 @@ class TaskManager {
 
     async initializeTasks() {
         try {
-            const response = await fetch('/api/tasks');
-            if (!response.ok) throw new Error('Erreur lors du chargement des tâches');
+            // Récupérer les tâches récurrentes de l'utilisateur connecté
+            const { data: tasks, error } = await supabase
+                .from('recurring_tasks')
+                .select('*')
+                .eq('user_id', this.currentUser.id);
             
-            const tasks = await response.json();
+            if (error) throw error;
+            
             tasks.forEach(task => {
                 this.tasksMap.set(task.id, { ...task, validations: {} });
             });
@@ -348,11 +434,19 @@ class TaskManager {
     async loadValidationsForCurrentWeek() {
         try {
             const weekEnd = this.getWeekEnd(this.currentWeekStart);
-            const response = await fetch(`/api/validations/range?start_date=${this.currentWeekStart.toISOString().split('T')[0]}&end_date=${weekEnd.toISOString().split('T')[0]}`);
+            const startDate = this.currentWeekStart.toISOString().split('T')[0];
+            const endDate = weekEnd.toISOString().split('T')[0];
             
-            if (!response.ok) throw new Error('Erreur lors du chargement des validations');
+            // Récupérer les validations de l'utilisateur connecté pour la période
+            const { data: validations, error } = await supabase
+                .from('daily_validations')
+                .select('*')
+                .eq('user_id', this.currentUser.id)
+                .gte('date', startDate)
+                .lte('date', endDate);
             
-            const validations = await response.json();
+            if (error) throw error;
+            
             this.mergeValidationData(validations);
         } catch (error) {
             console.error('Erreur chargement validations:', error);
@@ -387,11 +481,16 @@ class TaskManager {
         }
 
         try {
-            const response = await fetch(`/api/validations/range?start_date=${startDate}&end_date=${endDate}`);
-            if (!response.ok) {
-                throw new Error('Erreur lors du chargement de l\'historique');
-            }
-            const validations = await response.json();
+            // Récupérer les validations de l'utilisateur connecté pour la période
+            const { data: validations, error } = await supabase
+                .from('daily_validations')
+                .select('*')
+                .eq('user_id', this.currentUser.id)
+                .gte('date', startDate)
+                .lte('date', endDate);
+            
+            if (error) throw error;
+            
             this.mergeValidationData(validations);
             this.renderHistory(startDate, endDate);
 
@@ -521,6 +620,14 @@ class TaskManager {
         });
     }
 
+    formatDateForInput(date) {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = (d.getMonth() + 1).toString().padStart(2, '0');
+        const day = d.getDate().toString().padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
     async handleAddTask(e) {
         e.preventDefault();
         
@@ -530,16 +637,29 @@ class TaskManager {
         
         if (!name) return;
 
-        try {
-            const response = await fetch('/api/tasks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, target_frequency, description })
-            });
+        const isDuplicate = Array.from(this.tasksMap.values())
+            .some(task => task.name.toLowerCase() === name.toLowerCase());
 
-            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
+        if (isDuplicate) {
+            this.showNotification('Une tâche avec ce nom existe déjà.', 'error');
+            return;
+        }
+
+        try {
+            // Insérer une nouvelle tâche récurrente
+            const { data: newTask, error } = await supabase
+                .from('recurring_tasks')
+                .insert({
+                    user_id: this.currentUser.id,
+                    name: name,
+                    target_frequency: target_frequency,
+                    description: description
+                })
+                .select()
+                .single();
             
-            const newTask = await response.json();
+            if (error) throw error;
+            
             // Ajout à la "mémoire" centrale
             this.tasksMap.set(newTask.id, { ...newTask, validations: {} });
             
@@ -548,7 +668,12 @@ class TaskManager {
             this.taskForm.reset();
             this.showNotification('Tâche ajoutée avec succès', 'success');
         } catch (error) {
-            this.showNotification(error.message, 'error');
+            console.error('Erreur ajout tâche:', error);
+            if (error.code === '23505') { // Unique constraint violation
+                this.showNotification('Une tâche avec ce nom existe déjà.', 'error');
+            } else {
+                this.showNotification(error.message || 'Erreur lors de l\'ajout de la tâche', 'error');
+            }
         }
     }
 
@@ -559,33 +684,48 @@ class TaskManager {
         const name = this.todayTaskNameInput.value.trim();
         if (!name) return;
 
-        try {
-            const response = await fetch('/api/todo-tasks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
-            });
+        const isDuplicate = this.todayTasks.some(task => task.name.toLowerCase() === name.toLowerCase());
+        if (isDuplicate) {
+            this.showNotification('Cette tâche existe déjà.', 'error');
+            return;
+        }
 
-            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
+        try {
+            // Insérer une nouvelle tâche d'aujourd'hui
+            const { error } = await supabase
+                .from('today_tasks')
+                .insert({
+                    user_id: this.currentUser.id,
+                    name: name
+                });
+            
+            if (error) throw error;
             
             this.todayTaskNameInput.value = '';
             this.loadTodayTasks();
             this.showNotification('Tâche ajoutée', 'success');
         } catch (error) {
-            this.showNotification(error.message, 'error');
+            console.error('Erreur ajout tâche aujourd\'hui:', error);
+            this.showNotification(error.message || 'Erreur lors de l\'ajout de la tâche', 'error');
         }
     }
 
     async loadTodayTasks() {
         try {
-            const response = await fetch('/api/todo-tasks');
+            // Récupérer les tâches d'aujourd'hui de l'utilisateur connecté
+            const { data: tasks, error } = await supabase
+                .from('today_tasks')
+                .select('*')
+                .eq('user_id', this.currentUser.id)
+                .order('created_at', { ascending: false });
             
-            if (!response.ok) throw new Error('Erreur lors du chargement');
+            if (error) throw error;
             
-            const tasks = await response.json();
-            this.renderTodayTasks(tasks);
+            this.todayTasks = tasks || [];
+            this.renderTodayTasks(this.todayTasks);
         } catch (error) {
             console.error('Erreur chargement tâches:', error);
+            this.todayTasks = [];
             this.renderTodayTasks([]);
         }
     }
@@ -601,9 +741,9 @@ class TaskManager {
         this.noTodayTasksDiv.style.display = 'none';
         this.todayTasksList.innerHTML = tasks.map(task => `
             <div class="today-task-item ${task.completed ? 'completed' : ''}" data-id="${task.id}">
-                <div class="today-task-checkbox ${task.completed ? 'completed' : ''}" onclick="taskManager.toggleTodayTask(${task.id})"></div>
+                <div class="today-task-checkbox ${task.completed ? 'completed' : ''}" data-task-id="${task.id}"></div>
                 <div class="today-task-text">${this.escapeHtml(task.name)}</div>
-                <button class="today-task-delete" onclick="taskManager.deleteTodayTask(${task.id})" title="Supprimer">
+                <button class="today-task-delete" data-task-id="${task.id}" title="Supprimer">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
@@ -628,16 +768,29 @@ class TaskManager {
 
     async toggleTodayTask(taskId) {
         try {
-            const response = await fetch(`/api/todo-tasks/${taskId}/toggle`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            if (!response.ok) throw new Error('Erreur lors de la modification');
+            // Récupérer la tâche actuelle
+            const { data: task, error: fetchError } = await supabase
+                .from('today_tasks')
+                .select('completed')
+                .eq('id', taskId)
+                .eq('user_id', this.currentUser.id)
+                .single();
+            
+            if (fetchError) throw fetchError;
+            
+            // Mettre à jour le statut
+            const { error: updateError } = await supabase
+                .from('today_tasks')
+                .update({ completed: !task.completed })
+                .eq('id', taskId)
+                .eq('user_id', this.currentUser.id);
+            
+            if (updateError) throw updateError;
             
             this.loadTodayTasks();
         } catch (error) {
-            this.showNotification(error.message, 'error');
+            console.error('Erreur toggle tâche:', error);
+            this.showNotification(error.message || 'Erreur lors de la modification', 'error');
         }
     }
 
@@ -645,16 +798,20 @@ class TaskManager {
         if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return;
 
         try {
-            const response = await fetch(`/api/todo-tasks/${taskId}`, {
-                method: 'DELETE'
-            });
-
-            if (!response.ok) throw new Error('Erreur lors de la suppression');
+            // Supprimer la tâche d'aujourd'hui
+            const { error } = await supabase
+                .from('today_tasks')
+                .delete()
+                .eq('id', taskId)
+                .eq('user_id', this.currentUser.id);
+            
+            if (error) throw error;
             
             this.loadTodayTasks();
             this.showNotification('Tâche supprimée', 'success');
         } catch (error) {
-            this.showNotification(error.message, 'error');
+            console.error('Erreur suppression tâche:', error);
+            this.showNotification(error.message || 'Erreur lors de la suppression', 'error');
         }
     }
 
@@ -668,15 +825,21 @@ class TaskManager {
         if (!name || !this.editingTaskId) return;
 
         try {
-            const response = await fetch(`/api/tasks/${this.editingTaskId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, target_frequency, description })
-            });
-
-            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
+            // Mettre à jour la tâche récurrente
+            const { data: updatedTask, error } = await supabase
+                .from('recurring_tasks')
+                .update({
+                    name: name,
+                    target_frequency: target_frequency,
+                    description: description
+                })
+                .eq('id', this.editingTaskId)
+                .eq('user_id', this.currentUser.id)
+                .select()
+                .single();
             
-            const updatedTask = await response.json();
+            if (error) throw error;
+            
             // Mise à jour dans la "mémoire" centrale
             const task = this.tasksMap.get(this.editingTaskId);
             if (task) {
@@ -690,7 +853,8 @@ class TaskManager {
             this.closeModal();
             this.showNotification('Tâche modifiée avec succès', 'success');
         } catch (error) {
-            this.showNotification(error.message, 'error');
+            console.error('Erreur modification tâche:', error);
+            this.showNotification(error.message || 'Erreur lors de la modification', 'error');
         }
     }
 
@@ -747,21 +911,20 @@ class TaskManager {
         const date = this.validatingDate;
 
         try {
-            const response = await fetch('/api/validations', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            // Insérer ou mettre à jour la validation
+            const { error } = await supabase
+                .from('daily_validations')
+                .upsert({
+                    user_id: this.currentUser.id,
                     task_id: taskId,
                     date: date,
                     status: this.selectedStatus,
                     note: note
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Erreur inattendue du serveur' }));
-                throw new Error(errorData.error);
-            }
+                }, {
+                    onConflict: 'user_id, task_id, date' // Spécifier la contrainte unique
+                });
+            
+            if (error) throw error;
 
             // Mettre à jour l'état local dans tasksMap
             const task = this.tasksMap.get(taskId);
@@ -785,16 +948,15 @@ class TaskManager {
         const date = this.validatingDate;
 
         try {
-            const response = await fetch('/api/validations', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ task_id: taskId, date: date })
-            });
-
-            if (!response.ok && response.status !== 204) {
-                 const errorData = await response.json().catch(() => ({ error: 'Erreur inattendue du serveur' }));
-                throw new Error(errorData.error);
-            }
+            // Supprimer la validation
+            const { error } = await supabase
+                .from('daily_validations')
+                .delete()
+                .eq('user_id', this.currentUser.id)
+                .eq('task_id', taskId)
+                .eq('date', date);
+            
+            if (error) throw error;
 
             const task = this.tasksMap.get(taskId);
             if (task && task.validations[date]) {
@@ -816,8 +978,14 @@ class TaskManager {
         if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche et tout son historique ?')) return;
 
         try {
-            const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
+            // Supprimer la tâche récurrente (les validations seront supprimées automatiquement grâce à CASCADE)
+            const { error } = await supabase
+                .from('recurring_tasks')
+                .delete()
+                .eq('id', taskId)
+                .eq('user_id', this.currentUser.id);
+            
+            if (error) throw error;
             
             // Suppression de la "mémoire" centrale
             this.tasksMap.delete(taskId);
@@ -825,7 +993,8 @@ class TaskManager {
             this.updateStats();
             this.showNotification('Tâche supprimée avec succès', 'success');
         } catch (error) {
-            this.showNotification(error.message, 'error');
+            console.error('Erreur suppression tâche:', error);
+            this.showNotification(error.message || 'Erreur lors de la suppression', 'error');
         }
     }
 
@@ -916,7 +1085,7 @@ class TaskManager {
                         <div class="task-name">${this.escapeHtml(task.name)}</div>
                         <div class="task-meta">
                             ${task.target_frequency ? `<span class="task-target" title="Objectif hebdomadaire">🎯 ${progress.completedCount}/${task.target_frequency}</span>` : ''}
-                            ${streakInfo.streak > 0 && task.target_frequency === 7 ? `<span class="task-streak" title="Série de validations consécutives">🔥 ${streakInfo.streak}</span>` : ''}
+                            ${streakInfo.streak > 1 ? `<span class="task-streak" title="Série de validations consécutives">🔥 ${streakInfo.streak}</span>` : ''}
                         </div>
                     </div>
                     ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
@@ -928,18 +1097,18 @@ class TaskManager {
                                 <div class="day-validation ${v.isCurrentDay ? 'current-day' : ''}">
                                     <div class="day-label">${v.displayDate}</div>
                                     <div class="task-checkbox ${statusClass} ${!isClickable ? 'future-date' : ''}" 
-                                         ${isClickable ? `onclick="taskManager.openValidationModal(${task.id}, '${v.date}')"` : ''}
-                                         title="${v.isFutureDate ? 'Jour futur' : v.note ? this.escapeHtml(v.note) : 'Valider'}">
+                                         data-task-id="${task.id}" data-date="${v.date}" data-clickable="${isClickable}"
+                                         title="${v.isFutureDate ? 'Jour futur' : v.note ? '' : 'Valider'}">
                                         ${this.getStatusText(v.status)}
                                     </div>
-                                    ${v.note ? `<div class="note-indicator" title="${this.escapeHtml(v.note)}">📝</div>` : ''}
+                                    ${v.note ? `<div class="note-indicator-container"><div class="note-indicator" title="${this.escapeHtml(v.note)}">📝</div></div>` : ''}
                                 </div>
                             `;
                         }).join('')}
                     </div>
                     <div class="task-actions">
-                        <button class="action-btn edit" onclick="taskManager.openEditModal(${task.id})" title="Modifier"><i class="fas fa-edit"></i></button>
-                        <button class="action-btn delete" onclick="taskManager.deleteTask(${task.id})" title="Supprimer"><i class="fas fa-trash"></i></button>
+                        <button class="action-btn edit" data-task-id="${task.id}" title="Modifier"><i class="fas fa-edit"></i></button>
+                        <button class="action-btn delete" data-task-id="${task.id}" title="Supprimer"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
             `;
@@ -1088,9 +1257,32 @@ class TaskManager {
     async loadHeatmapData() {
         const year = this.heatmapYearSelect.value;
         try {
-            const response = await fetch(`/api/heatmap?year=${year}`);
-            if (!response.ok) throw new Error('Erreur de chargement des données de la heatmap');
-            const data = await response.json();
+            // Récupérer les données de validation pour l'année spécifiée
+            const startDate = `${year}-01-01`;
+            const endDate = `${year}-12-31`;
+            
+            const { data: validations, error } = await supabase
+                .from('daily_validations')
+                .select('date, status')
+                .eq('user_id', this.currentUser.id)
+                .eq('status', 2) // Seulement les validations "fait"
+                .gte('date', startDate)
+                .lte('date', endDate);
+            
+            if (error) throw error;
+            
+            // Traiter les données pour le format attendu par renderHeatmap
+            const dataMap = new Map();
+            validations.forEach(validation => {
+                const date = validation.date;
+                dataMap.set(date, (dataMap.get(date) || 0) + 1);
+            });
+            
+            const data = Array.from(dataMap.entries()).map(([date, count]) => ({
+                date: date,
+                completion_count: count
+            }));
+            
             this.renderHeatmap(data, parseInt(year));
         } catch (error) {
             console.error('Erreur Heatmap:', error);
@@ -1193,11 +1385,43 @@ class TaskManager {
 
     async loadAndRenderStatistics() {
         try {
-            const response = await fetch('/api/statistics');
-            if (!response.ok) throw new Error('Erreur de chargement des statistiques');
-            const stats = await response.json();
-
-            const haveTaskData = stats.taskSuccess && stats.taskSuccess.length > 0;
+            // Récupérer toutes les tâches avec objectif de l'utilisateur
+            const { data: tasks, error: tasksError } = await supabase
+                .from('recurring_tasks')
+                .select('id, name, target_frequency')
+                .eq('user_id', this.currentUser.id)
+                .not('target_frequency', 'is', null);
+            
+            if (tasksError) throw tasksError;
+            
+            if (!tasks || tasks.length === 0) {
+                this.noStatsData.style.display = 'block';
+                return;
+            }
+            
+            // Récupérer toutes les validations de l'utilisateur
+            const { data: validations, error: validationsError } = await supabase
+                .from('daily_validations')
+                .select('task_id, status')
+                .eq('user_id', this.currentUser.id);
+            
+            if (validationsError) throw validationsError;
+            
+            // Calculer les statistiques
+            const taskSuccess = tasks.map(task => {
+                const taskValidations = validations.filter(v => v.task_id === task.id);
+                const completedCount = taskValidations.filter(v => v.status === 2).length;
+                const totalWeeks = Math.ceil(taskValidations.length / 7);
+                const expectedCompletions = totalWeeks * task.target_frequency;
+                const successRate = expectedCompletions > 0 ? (completedCount / expectedCompletions) * 100 : 0;
+                
+                return {
+                    name: task.name,
+                    success_rate: Math.min(successRate, 100)
+                };
+            });
+            
+            const haveTaskData = taskSuccess.length > 0;
 
             if (!haveTaskData) {
                 this.noStatsData.style.display = 'block';
@@ -1205,7 +1429,7 @@ class TaskManager {
             }
             this.noStatsData.style.display = 'none';
 
-            if (haveTaskData) this.renderTaskSuccessChart(stats.taskSuccess);
+            if (haveTaskData) this.renderTaskSuccessChart(taskSuccess);
 
         } catch (error) {
             console.error('Erreur stats:', error);
@@ -1273,6 +1497,22 @@ class TaskManager {
             }
         });
     }
+
+    // Gérer la déconnexion
+    async handleLogout() {
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+                throw error;
+            }
+            
+            // Rediriger vers la page de connexion
+            window.location.href = 'auth.html';
+        } catch (error) {
+            console.error('Erreur lors de la déconnexion:', error);
+            this.showNotification('Erreur lors de la déconnexion', 'error');
+        }
+    }
 }
 
 // Styles pour les animations et éléments de gamification
@@ -1326,6 +1566,10 @@ style.textContent = `
         cursor: help;
     }
     
+    .note-indicator-container {
+        height: 1rem; /* Reserve space to avoid layout shifts */
+    }
+
     .task-meta {
         display: flex;
         gap: 10px;
