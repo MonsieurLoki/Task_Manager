@@ -187,13 +187,36 @@ app.get('/api/heatmap', (req, res) => {
 app.get('/api/statistics', (req, res) => {
     const stats = {};
     const taskSuccessQuery = `
+        WITH WeeklySuccess AS (
+            SELECT
+                t.id as task_id,
+                strftime('%Y-%W', dv.date) as week,
+                CAST(SUM(CASE WHEN dv.status = 2 THEN 1 ELSE 0 END) AS REAL) as successes
+            FROM recurring_tasks t
+            JOIN daily_validations dv ON t.id = dv.task_id
+            WHERE t.target_frequency IS NOT NULL AND t.target_frequency > 0
+            GROUP BY t.id, week
+        ),
+        WeeklySuccessRate AS (
+            SELECT
+                ws.task_id,
+                MIN(100.0, (ws.successes / t.target_frequency) * 100.0) as weekly_rate
+            FROM WeeklySuccess ws
+            JOIN recurring_tasks t ON ws.task_id = t.id
+        ),
+        AverageRates AS (
+            SELECT
+                task_id,
+                AVG(weekly_rate) as avg_success_rate
+            FROM WeeklySuccessRate
+            GROUP BY task_id
+        )
         SELECT
             t.name,
-            CAST(SUM(CASE WHEN dv.status = 2 THEN 1 ELSE 0 END) AS REAL) * 100 / COUNT(dv.id) as success_rate
-        FROM daily_validations dv
-        JOIN recurring_tasks t ON dv.task_id = t.id
-        GROUP BY t.id, t.name
-        HAVING COUNT(dv.id) > 0;
+            COALESCE(ar.avg_success_rate, 0) as success_rate
+        FROM recurring_tasks t
+        LEFT JOIN AverageRates ar ON t.id = ar.task_id
+        WHERE t.target_frequency IS NOT NULL AND t.target_frequency > 0;
     `;
     db.all(taskSuccessQuery, [], (err, rows) => {
         if (err) {
