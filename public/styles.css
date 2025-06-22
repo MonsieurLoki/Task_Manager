@@ -1494,6 +1494,15 @@ body.daily-view-active .view-selector {
     font-size: 1.5rem;
 }
 
+.stats-note-header {
+    font-size: 0.8rem;
+    color: var(--text-color-secondary);
+    text-align: center;
+    margin-top: 5px;
+    font-style: italic;
+    opacity: 0.8;
+}
+
 .stats-grid {
     display: flex;
     justify-content: center;
@@ -1512,9 +1521,9 @@ body.daily-view-active .view-selector {
 }
 
 .stat-card h3 {
+    color: var(--text-primary);
+    margin-bottom: 15px;
     text-align: center;
-    margin-bottom: 20px;
-    color: var(--text-secondary);
 }
 
 /* Animation du toggle */
