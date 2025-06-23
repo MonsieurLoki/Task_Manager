@@ -1793,4 +1793,55 @@ body {
     .today-tasks-list {
         max-height: 300px;
     }
+}
+
+/* Animation pour les formulaires */
+.task-form:focus-within,
+.today-task-form:focus-within {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px var(--shadow-secondary);
+}
+
+/* Modal de confirmation de suppression */
+.delete-confirm-content {
+    padding: 20px;
+}
+
+.delete-warning {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 25px;
+    padding: 15px;
+    background: rgba(237, 137, 54, 0.1);
+    border: 1px solid var(--warning-color);
+    border-radius: 8px;
+}
+
+.delete-warning i {
+    font-size: 1.5rem;
+    color: var(--warning-color);
+}
+
+.delete-warning p {
+    margin: 0;
+    color: var(--text-primary);
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.delete-confirm-content .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 0;
+}
+
+/* Animation pour la modale de suppression */
+#deleteConfirmModal {
+    animation: fadeInScale 0.3s ease-out;
+}
+
+#deleteConfirmModal .modal-content {
+    animation: slideInFromTop 0.3s ease-out;
 } 

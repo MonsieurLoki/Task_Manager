@@ -287,6 +287,29 @@
                 </form>
             </div>
         </div>
+
+        <!-- Modal de confirmation de suppression -->
+        <div id="deleteConfirmModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Confirmer la suppression</h3>
+                    <button id="closeDeleteModal" class="btn-icon"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="delete-confirm-content">
+                    <div class="delete-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p id="deleteConfirmMessage">Êtes-vous sûr de vouloir supprimer cette tâche ?</p>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" id="cancelDelete" class="btn-secondary">Annuler</button>
+                        <button type="button" id="confirmDelete" class="btn-danger">
+                            <i class="fas fa-trash-alt"></i> Supprimer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="notification" class="notification"></div>
     </div>
 

@@ -151,6 +151,13 @@ class TaskManager {
         this.statusButtons = document.querySelectorAll('.status-btn');
         this.focusModeToggle = document.getElementById('focusMode');
 
+        // Modal de confirmation de suppression
+        this.deleteConfirmModal = document.getElementById('deleteConfirmModal');
+        this.deleteConfirmMessage = document.getElementById('deleteConfirmMessage');
+        this.closeDeleteModalBtn = document.getElementById('closeDeleteModal');
+        this.cancelDeleteBtn = document.getElementById('cancelDelete');
+        this.confirmDeleteBtn = document.getElementById('confirmDelete');
+
         // Vue Calendrier
         this.heatmapViewBtn = document.getElementById('heatmapViewBtn');
         this.heatmapView = document.getElementById('heatmapView');
@@ -220,6 +227,11 @@ class TaskManager {
         this.deleteValidationBtn.addEventListener('click', () => this.handleDeleteValidation());
         this.validationForm.addEventListener('submit', (e) => this.handleValidation(e));
 
+        // Modal de confirmation de suppression
+        this.closeDeleteModalBtn.addEventListener('click', () => this.closeDeleteModal());
+        this.cancelDeleteBtn.addEventListener('click', () => this.closeDeleteModal());
+        this.confirmDeleteBtn.addEventListener('click', () => this.executeDelete());
+
         // Boutons de statut
         this.statusButtons.forEach(btn => {
             btn.addEventListener('click', () => this.selectStatus(btn));
@@ -244,6 +256,12 @@ class TaskManager {
             }
         });
 
+        this.deleteConfirmModal.addEventListener('click', (e) => {
+            if (e.target === this.deleteConfirmModal) {
+                this.closeDeleteModal();
+            }
+        });
+
         // Fermer modals avec Escape
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -252,6 +270,9 @@ class TaskManager {
                 }
                 if (this.validationModal.classList.contains('show')) {
                     this.closeValidationModal();
+                }
+                if (this.deleteConfirmModal.classList.contains('show')) {
+                    this.closeDeleteModal();
                 }
             }
         });
@@ -795,24 +816,12 @@ class TaskManager {
     }
 
     async deleteTodayTask(taskId) {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return;
-
-        try {
-            // Supprimer la tâche d'aujourd'hui
-            const { error } = await supabase
-                .from('today_tasks')
-                .delete()
-                .eq('id', taskId)
-                .eq('user_id', this.currentUser.id);
-            
-            if (error) throw error;
-            
-            this.loadTodayTasks();
-            this.showNotification('Tâche supprimée', 'success');
-        } catch (error) {
-            console.error('Erreur suppression tâche:', error);
-            this.showNotification(error.message || 'Erreur lors de la suppression', 'error');
-        }
+        // Récupérer le nom de la tâche pour l'afficher dans la modale
+        const task = this.todayTasks.find(t => t.id === taskId);
+        if (!task) return;
+        
+        // Ouvrir la modale de confirmation au lieu d'utiliser confirm()
+        this.openDeleteModal(taskId, 'today', task.name);
     }
 
     async handleEditTask(e) {
@@ -975,27 +984,12 @@ class TaskManager {
     }
 
     async deleteTask(taskId) {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche et tout son historique ?')) return;
-
-        try {
-            // Supprimer la tâche récurrente (les validations seront supprimées automatiquement grâce à CASCADE)
-            const { error } = await supabase
-                .from('recurring_tasks')
-                .delete()
-                .eq('id', taskId)
-                .eq('user_id', this.currentUser.id);
-            
-            if (error) throw error;
-            
-            // Suppression de la "mémoire" centrale
-            this.tasksMap.delete(taskId);
-            this.renderTasks();
-            this.updateStats();
-            this.showNotification('Tâche supprimée avec succès', 'success');
-        } catch (error) {
-            console.error('Erreur suppression tâche:', error);
-            this.showNotification(error.message || 'Erreur lors de la suppression', 'error');
-        }
+        // Récupérer le nom de la tâche pour l'afficher dans la modale
+        const task = this.tasksMap.get(taskId);
+        if (!task) return;
+        
+        // Ouvrir la modale de confirmation au lieu d'utiliser confirm()
+        this.openDeleteModal(taskId, 'recurring', task.name);
     }
 
     openEditModal(taskId) {
@@ -1497,6 +1491,107 @@ class TaskManager {
                 }
             }
         });
+    }
+
+    // --- Gestion de la modale de confirmation de suppression ---
+
+    // Variables pour stocker les informations de suppression
+    pendingDeleteTaskId = null;
+    pendingDeleteType = null; // 'recurring' ou 'today'
+
+    // Ouvrir la modale de confirmation de suppression
+    openDeleteModal(taskId, type, taskName) {
+        this.pendingDeleteTaskId = taskId;
+        this.pendingDeleteType = type;
+        
+        let message = '';
+        if (type === 'recurring') {
+            message = `Êtes-vous sûr de vouloir supprimer la tâche "${taskName}" ? Cette action supprimera également toutes les validations associées.`;
+        } else if (type === 'today') {
+            message = `Êtes-vous sûr de vouloir supprimer la tâche "${taskName}" ?`;
+        }
+        
+        this.deleteConfirmMessage.textContent = message;
+        this.deleteConfirmModal.classList.add('show');
+    }
+
+    // Fermer la modale de confirmation de suppression
+    closeDeleteModal() {
+        this.deleteConfirmModal.classList.remove('show');
+        this.pendingDeleteTaskId = null;
+        this.pendingDeleteType = null;
+    }
+
+    // Exécuter la suppression après confirmation
+    async executeDelete() {
+        if (!this.pendingDeleteTaskId || !this.pendingDeleteType) {
+            this.closeDeleteModal();
+            return;
+        }
+
+        const taskId = this.pendingDeleteTaskId;
+        const type = this.pendingDeleteType;
+        
+        this.closeDeleteModal();
+
+        try {
+            if (type === 'recurring') {
+                await this.performDeleteRecurringTask(taskId);
+            } else if (type === 'today') {
+                await this.performDeleteTodayTask(taskId);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la suppression:', error);
+            this.showNotification(error.message || 'Erreur lors de la suppression', 'error');
+        }
+    }
+
+    // Effectuer la suppression d'une tâche récurrente
+    async performDeleteRecurringTask(taskId) {
+        // Animation de suppression
+        const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (taskElement) {
+            taskElement.classList.add('animate-out');
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        // Supprimer la tâche récurrente
+        const { error } = await supabase
+            .from('recurring_tasks')
+            .delete()
+            .eq('id', taskId)
+            .eq('user_id', this.currentUser.id);
+        
+        if (error) throw error;
+        
+        // Supprimer de la "mémoire" centrale
+        this.tasksMap.delete(taskId);
+        
+        this.renderTasks();
+        this.updateStats();
+        this.showNotification('Tâche supprimée avec succès', 'success');
+    }
+
+    // Effectuer la suppression d'une tâche d'aujourd'hui
+    async performDeleteTodayTask(taskId) {
+        // Animation de suppression
+        const taskElement = document.querySelector(`.today-task-item[data-id="${taskId}"]`);
+        if (taskElement) {
+            taskElement.classList.add('animate-out');
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        // Supprimer la tâche d'aujourd'hui
+        const { error } = await supabase
+            .from('today_tasks')
+            .delete()
+            .eq('id', taskId)
+            .eq('user_id', this.currentUser.id);
+        
+        if (error) throw error;
+        
+        this.loadTodayTasks();
+        this.showNotification('Tâche supprimée', 'success');
     }
 
     // Gérer la déconnexion
