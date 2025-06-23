@@ -149,7 +149,11 @@ async function handleSignup(e) {
             email: email,
             password: password,
             options: {
-                emailRedirectTo: window.location.origin + '/index.html'
+                emailRedirectTo: window.location.origin + '/index.html',
+                // Forcer l'envoi de l'email de confirmation
+                data: {
+                    disable_email_confirm: false
+                }
             }
         });
         
