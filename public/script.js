@@ -1481,7 +1481,8 @@ class TaskManager {
                 maintainAspectRatio: false,
                 scales: {
                     y: {
-                        beginAtZero: true,
+                        min: 0,
+                        max: 100,
                         ticks: {
                             callback: function(value) {
                                 return value + "%"
