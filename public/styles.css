@@ -375,6 +375,7 @@ body.daily-view-active .view-selector {
 }
 
 .view-selector-btn {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -388,7 +389,6 @@ body.daily-view-active .view-selector {
     min-width: 80px;
     backdrop-filter: blur(10px);
     box-shadow: 0 4px 12px var(--shadow-primary);
-    position: relative;
 }
 
 .view-selector-btn:hover {
@@ -411,6 +411,27 @@ body.daily-view-active .view-selector {
     font-size: 0.8rem;
     font-weight: 600;
     text-align: center;
+}
+
+#todoNotificationBadge {
+    position: absolute;
+    top: -7px;      /* Décale la pastille vers le haut, pour qu'elle déborde */
+    right: -7px;    /* Décale la pastille vers la droite, pour qu'elle déborde */
+    background: #e74c3c;
+    color: #fff;
+    border-radius: 50%;
+    min-width: 20px;
+    height: 20px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    display: none; /* Affiché dynamiquement par JS */
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    line-height: 1;
+    border: 2px solid #fff; /* Pour un effet de contour blanc comme sur l'exemple */
 }
 
 /* Pastille de notification */
@@ -1793,4 +1814,48 @@ body {
     .today-tasks-list {
         max-height: 300px;
     }
-} 
+}
+
+.confirm-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.25);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.confirm-modal {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    padding: 32px 28px 22px 28px;
+    min-width: 320px;
+    max-width: 90vw;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+.confirm-modal-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #222;
+}
+.confirm-modal-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 10px;
+}
+.confirm-modal-btn {
+    padding: 10px 22px;
+    border-radius: 8px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.confirm-modal-btn.cancel { background: #eee; color: #333; }
+.confirm-modal-btn.danger { background: #e74c3c; color: #fff; } 

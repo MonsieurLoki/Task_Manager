@@ -37,6 +37,14 @@ function initializeDb() {
                 UNIQUE(task_id, date)
             )
         `);
+        db.run(`
+            CREATE TABLE IF NOT EXISTS todo_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                completed INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
         console.log("Tables de la base de données initialisées.");
     });
 }
@@ -194,6 +202,44 @@ app.get('/api/statistics', (req, res) => {
         }
         stats.taskSuccess = rows;
         res.json(stats);
+    });
+});
+
+app.get('/api/todo-tasks', (req, res) => {
+    db.all('SELECT * FROM todo_tasks ORDER BY created_at ASC', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/todo-tasks', (req, res) => {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Le nom est requis' });
+    db.run('INSERT INTO todo_tasks (name) VALUES (?)', [name], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.status(201).json({ id: this.lastID, name, completed: 0 });
+    });
+});
+
+app.put('/api/todo-tasks/:id/toggle', (req, res) => {
+    const { id } = req.params;
+    db.get('SELECT completed FROM todo_tasks WHERE id = ?', [id], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Tâche non trouvée' });
+        const newCompleted = row.completed ? 0 : 1;
+        db.run('UPDATE todo_tasks SET completed = ? WHERE id = ?', [newCompleted, id], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id, completed: newCompleted });
+        });
+    });
+});
+
+app.delete('/api/todo-tasks/:id', (req, res) => {
+    const { id } = req.params;
+    db.run('DELETE FROM todo_tasks WHERE id = ?', [id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Tâche non trouvée' });
+        res.status(204).send();
     });
 });
 

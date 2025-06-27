@@ -22,6 +22,7 @@ class TaskManager {
             this.initializeElements();
             this.bindEvents();
             this.displayUserInfo();
+            document.body.classList.add('daily-view-active');
             this.switchView(this.currentView);
             this.initializeTasks();
             this.updateWeekDisplay();
@@ -147,6 +148,17 @@ class TaskManager {
         this.statsView = document.getElementById('statsView');
         this.noStatsData = document.getElementById('noStatsData');
         this.taskSuccessChart = null;
+
+        // Pour les tâches uniques (à faire aujourd'hui)
+        this.todayView = document.getElementById('todayView');
+        this.weekView = document.getElementById('weekView');
+        this.weekViewBtn = document.getElementById('weekViewBtn');
+        this.todayViewBtn = document.getElementById('todayViewBtn');
+        this.todayTaskForm = document.getElementById('todayTaskForm');
+        this.todayTaskNameInput = document.getElementById('todayTaskName');
+        this.todayTasksList = document.getElementById('todayTasksList');
+        this.noTodayTasksDiv = document.getElementById('noTodayTasks');
+        this.todoNotificationBadge = document.getElementById('todoNotificationBadge');
     }
 
     bindEvents() {
@@ -219,6 +231,32 @@ class TaskManager {
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', () => this.handleLogout());
+        }
+
+        // Switch de vue entre semaine et à faire
+        if (this.weekViewBtn && this.todayViewBtn) {
+            this.weekViewBtn.addEventListener('click', () => this.switchPanel('week'));
+            this.todayViewBtn.addEventListener('click', () => this.switchPanel('today'));
+        }
+        // Ajout tâche unique
+        if (this.todayTaskForm) {
+            this.todayTaskForm.addEventListener('submit', (e) => this.handleAddTodayTask(e));
+        }
+        // Clic sur une tâche unique (toggle ou suppression)
+        if (this.todayTasksList) {
+            this.todayTasksList.addEventListener('click', (e) => {
+                const checkbox = e.target.closest('.today-task-checkbox');
+                if (checkbox) {
+                    const id = checkbox.dataset.taskId;
+                    this.toggleTodayTask(id);
+                    return;
+                }
+                const delBtn = e.target.closest('.today-task-delete');
+                if (delBtn) {
+                    const id = delBtn.dataset.taskId;
+                    this.deleteTodayTask(id);
+                }
+            });
         }
     }
 
@@ -690,20 +728,18 @@ class TaskManager {
     }
 
     async deleteTask(taskId) {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche et tout son historique ?')) return;
-
-        try {
-            const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-            if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
-            
-            // Suppression de la "mémoire" centrale
-            this.tasksMap.delete(taskId);
-            this.renderTasks();
-            this.updateStats();
-            this.showNotification('Tâche supprimée avec succès', 'success');
-        } catch (error) {
-            this.showNotification(error.message, 'error');
-        }
+        const task = this.tasksMap.get(taskId);
+        this.createConfirmModal(`Supprimer la tâche récurrente "${task ? task.name : ''}" et tout son historique ?`, async () => {
+            try {
+                await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+                this.tasksMap.delete(taskId);
+                this.renderTasks();
+                this.updateStats();
+                this.showNotification('Tâche supprimée avec succès', 'success');
+            } catch (error) {
+                this.showNotification(error.message, 'error');
+            }
+        });
     }
 
     openEditModal(taskId) {
@@ -1159,6 +1195,140 @@ class TaskManager {
         } catch (error) {
             this.showNotification('Erreur lors de la déconnexion', 'error');
         }
+    }
+
+    switchPanel(panel) {
+        if (panel === 'week') {
+            this.weekView.classList.add('active');
+            this.todayView.classList.remove('active');
+            this.weekViewBtn.classList.add('active');
+            this.todayViewBtn.classList.remove('active');
+            document.body.classList.add('daily-view-active');
+        } else if (panel === 'today') {
+            this.weekView.classList.remove('active');
+            this.todayView.classList.add('active');
+            this.weekViewBtn.classList.remove('active');
+            this.todayViewBtn.classList.add('active');
+            document.body.classList.add('daily-view-active');
+        } else {
+            document.body.classList.remove('daily-view-active');
+        }
+    }
+
+    async handleAddTodayTask(e) {
+        e.preventDefault();
+        const name = this.todayTaskNameInput.value.trim();
+        if (!name) return;
+        const isDuplicate = (this.todayTasks || []).some(task => task.name.trim().toLowerCase() === name.toLowerCase());
+        if (isDuplicate) {
+            this.showNotification('Cette tâche existe déjà.', 'error');
+            return;
+        }
+        try {
+            const response = await fetch('/api/todo-tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (!response.ok) throw new Error('Erreur lors de l\'ajout');
+            this.todayTaskNameInput.value = '';
+            await this.loadTodayTasks();
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    async loadTodayTasks() {
+        try {
+            const response = await fetch('/api/todo-tasks');
+            if (!response.ok) throw new Error('Erreur lors du chargement');
+            const tasks = await response.json();
+            this.todayTasks = tasks;
+            if (tasks.length === 0) {
+                this.todayTasksList.innerHTML = '';
+                this.noTodayTasksDiv.style.display = 'block';
+                this.updateNotificationBadge(0);
+                return;
+            }
+            this.noTodayTasksDiv.style.display = 'none';
+            this.todayTasksList.innerHTML = tasks.map(task => `
+                <div class="today-task-item${task.completed ? ' completed' : ''}" data-id="${task.id}">
+                    <div class="today-task-checkbox${task.completed ? ' completed' : ''}" data-task-id="${task.id}"></div>
+                    <div class="today-task-text">${this.escapeHtml(task.name)}</div>
+                    <button class="today-task-delete" data-task-id="${task.id}" title="Supprimer">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+            const uncompletedCount = tasks.filter(t => !t.completed).length;
+            this.updateNotificationBadge(uncompletedCount);
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    async toggleTodayTask(taskId) {
+        try {
+            await fetch(`/api/todo-tasks/${taskId}/toggle`, { method: 'PUT' });
+            await this.loadTodayTasks();
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    async deleteTodayTask(taskId) {
+        const task = this.todayTasks.find(t => t.id == taskId);
+        this.createConfirmModal(`Supprimer la tâche unique "${task ? task.name : ''}" ?`, async () => {
+            try {
+                await fetch(`/api/todo-tasks/${taskId}`, { method: 'DELETE' });
+                await this.loadTodayTasks();
+            } catch (error) {
+                this.showNotification(error.message, 'error');
+            }
+        });
+    }
+
+    updateNotificationBadge(count) {
+        if (!this.todoNotificationBadge) return;
+        if (count > 0) {
+            this.todoNotificationBadge.textContent = count;
+            this.todoNotificationBadge.style.display = 'flex';
+        } else {
+            this.todoNotificationBadge.style.display = 'none';
+        }
+    }
+
+    createConfirmModal(message, onConfirm) {
+        // Supprime toute modale existante
+        const old = document.getElementById('confirmModalOverlay');
+        if (old) old.remove();
+        // Overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-modal-overlay';
+        overlay.id = 'confirmModalOverlay';
+        // Modale
+        const modal = document.createElement('div');
+        modal.className = 'confirm-modal';
+        // Titre
+        const title = document.createElement('div');
+        title.className = 'confirm-modal-title';
+        title.textContent = message;
+        // Actions
+        const actions = document.createElement('div');
+        actions.className = 'confirm-modal-actions';
+        // Boutons
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'confirm-modal-btn cancel';
+        cancelBtn.textContent = 'Annuler';
+        cancelBtn.onclick = () => overlay.remove();
+        const dangerBtn = document.createElement('button');
+        dangerBtn.className = 'confirm-modal-btn danger';
+        dangerBtn.textContent = 'Supprimer';
+        dangerBtn.onclick = () => { overlay.remove(); onConfirm(); };
+        actions.append(cancelBtn, dangerBtn);
+        modal.append(title, actions);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
     }
 }
 
