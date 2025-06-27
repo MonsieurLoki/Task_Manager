@@ -37,14 +37,6 @@ function initializeDb() {
                 UNIQUE(task_id, date)
             )
         `);
-        db.run(`
-            CREATE TABLE IF NOT EXISTS today_tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                completed BOOLEAN DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
         console.log("Tables de la base de données initialisées.");
     });
 }
@@ -187,36 +179,13 @@ app.get('/api/heatmap', (req, res) => {
 app.get('/api/statistics', (req, res) => {
     const stats = {};
     const taskSuccessQuery = `
-        WITH WeeklySuccess AS (
-            SELECT
-                t.id as task_id,
-                strftime('%Y-%W', dv.date) as week,
-                CAST(SUM(CASE WHEN dv.status = 2 THEN 1 ELSE 0 END) AS REAL) as successes
-            FROM recurring_tasks t
-            JOIN daily_validations dv ON t.id = dv.task_id
-            WHERE t.target_frequency IS NOT NULL AND t.target_frequency > 0
-            GROUP BY t.id, week
-        ),
-        WeeklySuccessRate AS (
-            SELECT
-                ws.task_id,
-                MIN(100.0, (ws.successes / t.target_frequency) * 100.0) as weekly_rate
-            FROM WeeklySuccess ws
-            JOIN recurring_tasks t ON ws.task_id = t.id
-        ),
-        AverageRates AS (
-            SELECT
-                task_id,
-                AVG(weekly_rate) as avg_success_rate
-            FROM WeeklySuccessRate
-            GROUP BY task_id
-        )
         SELECT
             t.name,
-            COALESCE(ar.avg_success_rate, 0) as success_rate
-        FROM recurring_tasks t
-        LEFT JOIN AverageRates ar ON t.id = ar.task_id
-        WHERE t.target_frequency IS NOT NULL AND t.target_frequency > 0;
+            CAST(SUM(CASE WHEN dv.status = 2 THEN 1 ELSE 0 END) AS REAL) * 100 / COUNT(dv.id) as success_rate
+        FROM daily_validations dv
+        JOIN recurring_tasks t ON dv.task_id = t.id
+        GROUP BY t.id, t.name
+        HAVING COUNT(dv.id) > 0;
     `;
     db.all(taskSuccessQuery, [], (err, rows) => {
         if (err) {
@@ -228,66 +197,9 @@ app.get('/api/statistics', (req, res) => {
     });
 });
 
-// Routes pour les tâches à faire
-app.post('/api/todo-tasks', (req, res) => {
-    const { name } = req.body;
-    if (!name) {
-        return res.status(400).json({ error: 'Le nom de la tâche est requis' });
-    }
-    
-    const query = `INSERT INTO today_tasks (name) VALUES (?)`;
-    db.run(query, [name], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.status(201).json({ id: this.lastID, name, completed: false });
-    });
-});
-
-app.get('/api/todo-tasks', (req, res) => {
-    const query = `SELECT * FROM today_tasks ORDER BY created_at ASC`;
-    db.all(query, [], (err, rows) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json(rows);
-    });
-});
-
-app.put('/api/todo-tasks/:id/toggle', (req, res) => {
-    const { id } = req.params;
-    
-    const query = `
-        UPDATE today_tasks 
-        SET completed = CASE WHEN completed = 1 THEN 0 ELSE 1 END 
-        WHERE id = ?
-    `;
-    db.run(query, [id], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Tâche non trouvée' });
-        }
-        res.json({ message: 'Statut modifié' });
-    });
-});
-
-app.delete('/api/todo-tasks/:id', (req, res) => {
-    const { id } = req.params;
-    
-    db.run('DELETE FROM today_tasks WHERE id = ?', [id], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Tâche non trouvée' });
-        }
-        res.status(204).send();
-    });
-});
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Serveur démarré sur http://localhost:${PORT}`);
 }); 
+
+// server.js
