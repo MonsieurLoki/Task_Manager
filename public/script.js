@@ -24,7 +24,8 @@ class TaskManager {
             this.displayUserInfo();
             document.body.classList.add('daily-view-active');
             this.switchView(this.currentView);
-            this.initializeTasks();
+            await this.initializeTasks();
+            await this.loadTodayTasks();
             this.updateWeekDisplay();
             this.initializeHistoryDates();
         } catch (error) {
@@ -348,8 +349,9 @@ class TaskManager {
 
     async initializeTasks() {
         try {
+            const user_id = this.getCurrentUserId();
             // 1. Charger toutes les tâches de base
-            const tasksResponse = await fetch('/api/tasks');
+            const tasksResponse = await fetch(`/api/tasks?user_id=${encodeURIComponent(user_id)}`);
             if (!tasksResponse.ok) throw new Error('Impossible de charger les tâches de base');
             const tasks = await tasksResponse.json();
 
@@ -373,8 +375,9 @@ class TaskManager {
 
     async loadValidationsForCurrentWeek() {
         try {
+            const user_id = this.getCurrentUserId();
             const weekEnd = this.getWeekEnd(this.currentWeekStart);
-            const response = await fetch(`/api/validations/range?start_date=${this.currentWeekStart.toISOString().split('T')[0]}&end_date=${weekEnd.toISOString().split('T')[0]}`);
+            const response = await fetch(`/api/validations/range?start_date=${this.currentWeekStart.toISOString().split('T')[0]}&end_date=${weekEnd.toISOString().split('T')[0]}&user_id=${encodeURIComponent(user_id)}`);
             
             if (!response.ok) throw new Error('Erreur lors du chargement des validations');
             
@@ -413,7 +416,8 @@ class TaskManager {
         }
 
         try {
-            const response = await fetch(`/api/validations/range?start_date=${startDate}&end_date=${endDate}`);
+            const user_id = this.getCurrentUserId();
+            const response = await fetch(`/api/validations/range?start_date=${startDate}&end_date=${endDate}&user_id=${encodeURIComponent(user_id)}`);
             if (!response.ok) {
                 throw new Error('Erreur lors du chargement de l\'historique');
             }
@@ -475,7 +479,6 @@ class TaskManager {
             const target = task.target_frequency;
             let percentage = 0;
             let proratedTarget = 0;
-            
             if (target > 0 && totalDaysInPeriod > 0) {
                 proratedTarget = (target / 7) * totalDaysInPeriod;
                 percentage = proratedTarget > 0 ? (completedCount / proratedTarget) * 100 : 0;
@@ -483,14 +486,16 @@ class TaskManager {
             } else if (totalDaysInPeriod > 0) {
                 percentage = (completedCount / totalDaysInPeriod) * 100;
             }
-            
-            const progressText = target ? `(Objectif: ${completedCount}/${Math.round(proratedTarget)})` : `(${completedCount}/${totalDaysInPeriod})`;
+            // Affiche le texte de progression uniquement pour les tâches avec objectif
+            const progressText = (target > 0)
+                ? `<span class='history-progress'>(${completedCount}/${Math.round(proratedTarget)})</span>`
+                : '';
 
             tableHtml += `
                 <tr>
                     <td class="task-name">
                         ${this.escapeHtml(task.name)}
-                        <span class="history-progress">${progressText}</span>
+                        ${progressText}
                     </td>
                     ${cells}
                     <td class="percentage-cell">${percentage.toFixed(0)}%</td>
@@ -552,10 +557,11 @@ class TaskManager {
         if (!name) return;
 
         try {
+            const user_id = this.getCurrentUserId();
             const response = await fetch('/api/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, target_frequency, description })
+                body: JSON.stringify({ name, target_frequency, description, user_id })
             });
 
             if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
@@ -576,29 +582,31 @@ class TaskManager {
     async handleEditTask(e) {
         e.preventDefault();
         
+        const id = this.editingTaskId;
         const name = this.editNameInput.value.trim();
         const target_frequency = parseInt(this.editTargetFrequencyInput.value) || null;
         const description = this.editDescriptionInput.value.trim();
         
-        if (!name || !this.editingTaskId) return;
+        if (!name) return;
 
         try {
-            const response = await fetch(`/api/tasks/${this.editingTaskId}`, {
+            const user_id = this.getCurrentUserId();
+            const response = await fetch(`/api/tasks/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, target_frequency, description })
+                body: JSON.stringify({ name, target_frequency, description, user_id })
             });
 
             if (!response.ok) throw new Error((await response.json()).error || 'Erreur');
             
             const updatedTask = await response.json();
             // Mise à jour dans la "mémoire" centrale
-            const task = this.tasksMap.get(this.editingTaskId);
+            const task = this.tasksMap.get(id);
             if (task) {
                 task.name = updatedTask.name;
                 task.target_frequency = updatedTask.target_frequency;
                 task.description = updatedTask.description;
-                this.tasksMap.set(this.editingTaskId, task);
+                this.tasksMap.set(id, task);
             }
             
             this.renderTasks();
@@ -662,6 +670,7 @@ class TaskManager {
         const date = this.validatingDate;
 
         try {
+            const user_id = this.getCurrentUserId();
             const response = await fetch('/api/validations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -669,7 +678,8 @@ class TaskManager {
                     task_id: taskId,
                     date: date,
                     status: this.selectedStatus,
-                    note: note
+                    note: note,
+                    user_id
                 })
             });
 
@@ -700,10 +710,11 @@ class TaskManager {
         const date = this.validatingDate;
 
         try {
+            const user_id = this.getCurrentUserId();
             const response = await fetch('/api/validations', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ task_id: taskId, date: date })
+                body: JSON.stringify({ task_id: taskId, date: date, user_id })
             });
 
             if (!response.ok && response.status !== 204) {
@@ -731,7 +742,12 @@ class TaskManager {
         const task = this.tasksMap.get(taskId);
         this.createConfirmModal(`Supprimer la tâche récurrente "${task ? task.name : ''}" et tout son historique ?`, async () => {
             try {
-                await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+                const user_id = this.getCurrentUserId();
+                await fetch(`/api/tasks/${taskId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id })
+                });
                 this.tasksMap.delete(taskId);
                 this.renderTasks();
                 this.updateStats();
@@ -829,7 +845,7 @@ class TaskManager {
                         <div class="task-name">${this.escapeHtml(task.name)}</div>
                         <div class="task-meta">
                             ${task.target_frequency ? `<span class="task-target" title="Objectif hebdomadaire">🎯 ${progress.completedCount}/${task.target_frequency}</span>` : ''}
-                            ${streakInfo.streak > 0 && task.target_frequency === 7 ? `<span class="task-streak" title="Série de validations consécutives">🔥 ${streakInfo.streak}</span>` : ''}
+                            ${(task.target_frequency && streakInfo.streak > 0) ? `<span class="task-streak" title="Série de validations consécutives">🔥 ${streakInfo.streak}</span>` : ''}
                         </div>
                     </div>
                     ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
@@ -964,20 +980,19 @@ class TaskManager {
     calculateStreak(task) {
         let streak = 0;
         let checkDate = new Date();
-        
-        // Boucle pour vérifier les jours passés
+        const todayStr = new Date().toISOString().split('T')[0];
         for (let i = 0; i < 365; i++) {
             const dateStr = checkDate.toISOString().split('T')[0];
             const validation = task.validations[dateStr];
-
             if (validation && validation.status === 2) {
                 streak++;
+            } else if (validation && (validation.status === 0 || validation.status === 1)) {
+                // Si la tâche a été explicitement non validée ou partiellement validée, on casse la streak
+                break;
+            } else if (dateStr === todayStr) {
+                // On ne casse pas la streak si aujourd'hui n'est pas encore validé
             } else {
-                // La série se brise si un jour n'est pas validé (sauf aujourd'hui)
-                const todayStr = new Date().toISOString().split('T')[0];
-                if (dateStr !== todayStr) {
-                    break;
-                }
+                break;
             }
             checkDate.setDate(checkDate.getDate() - 1);
         }
@@ -1106,24 +1121,22 @@ class TaskManager {
 
     async loadAndRenderStatistics() {
         try {
-            const response = await fetch('/api/statistics');
+            const user_id = this.getCurrentUserId();
+            const start_date = this.currentWeekStart.toISOString().split('T')[0];
+            const end_date = this.getWeekEnd(this.currentWeekStart).toISOString().split('T')[0];
+            const response = await fetch(`/api/statistics?user_id=${encodeURIComponent(user_id)}&start_date=${start_date}&end_date=${end_date}`);
             if (!response.ok) throw new Error('Erreur de chargement des statistiques');
             const stats = await response.json();
-
             const haveTaskData = stats.taskSuccess && stats.taskSuccess.length > 0;
-
             if (!haveTaskData) {
                 this.noStatsData.style.display = 'block';
                 return;
             }
             this.noStatsData.style.display = 'none';
-
-            if (haveTaskData) this.renderTaskSuccessChart(stats.taskSuccess);
-
+            this.renderTaskSuccessChart(stats.taskSuccess);
         } catch (error) {
             console.error('Erreur stats:', error);
             this.noStatsData.style.display = 'block';
-            this.showNotification('Impossible de charger les statistiques', 'error');
         }
     }
 
@@ -1133,25 +1146,20 @@ class TaskManager {
         }
         const container = document.getElementById('taskSuccessChart').parentElement;
         container.innerHTML = '<canvas id="taskSuccessChart"></canvas>';
-        
         // Gérer la largeur dynamique
         const numTasks = data.length;
         if (numTasks > 0) {
             const barWidth = 80;
             const baseWidth = 150;
             let calculatedWidth = baseWidth + numTasks * barWidth;
-
             const minWidth = 300;
             const maxWidth = 1100;
-
             calculatedWidth = Math.max(minWidth, calculatedWidth);
             calculatedWidth = Math.min(maxWidth, calculatedWidth);
-            
             container.style.width = `${calculatedWidth}px`;
         } else {
             container.style.width = '100%';
         }
-
         const ctx = document.getElementById('taskSuccessChart').getContext('2d');
         this.taskSuccessChart = new Chart(ctx, {
             type: 'bar',
@@ -1159,7 +1167,7 @@ class TaskManager {
                 labels: data.map(d => d.name),
                 datasets: [{
                     label: '% de réussite',
-                    data: data.map(d => d.success_rate.toFixed(2)),
+                    data: data.map(d => d.success_rate),
                     backgroundColor: 'rgba(102, 126, 234, 0.6)',
                     borderColor: 'rgba(102, 126, 234, 1)',
                     borderWidth: 1
@@ -1171,6 +1179,7 @@ class TaskManager {
                 scales: {
                     y: {
                         beginAtZero: true,
+                        max: 100,
                         ticks: {
                             callback: function(value) {
                                 return value + "%"
@@ -1215,32 +1224,16 @@ class TaskManager {
         }
     }
 
-    async handleAddTodayTask(e) {
-        e.preventDefault();
-        const name = this.todayTaskNameInput.value.trim();
-        if (!name) return;
-        const isDuplicate = (this.todayTasks || []).some(task => task.name.trim().toLowerCase() === name.toLowerCase());
-        if (isDuplicate) {
-            this.showNotification('Cette tâche existe déjà.', 'error');
-            return;
-        }
-        try {
-            const response = await fetch('/api/todo-tasks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
-            });
-            if (!response.ok) throw new Error('Erreur lors de l\'ajout');
-            this.todayTaskNameInput.value = '';
-            await this.loadTodayTasks();
-        } catch (error) {
-            this.showNotification(error.message, 'error');
-        }
+    // Ajout d'un helper pour obtenir l'user_id
+    getCurrentUserId() {
+        return this.currentUser && this.currentUser.id;
     }
 
+    // Modifie loadTodayTasks pour inclure user_id
     async loadTodayTasks() {
         try {
-            const response = await fetch('/api/todo-tasks');
+            const user_id = this.getCurrentUserId();
+            const response = await fetch(`/api/todo-tasks?user_id=${encodeURIComponent(user_id)}`);
             if (!response.ok) throw new Error('Erreur lors du chargement');
             const tasks = await response.json();
             this.todayTasks = tasks;
@@ -1267,20 +1260,57 @@ class TaskManager {
         }
     }
 
-    async toggleTodayTask(taskId) {
+    // Modifie handleAddTodayTask pour inclure user_id
+    async handleAddTodayTask(e) {
+        e.preventDefault();
+        const name = this.todayTaskNameInput.value.trim();
+        if (!name) return;
+        const isDuplicate = (this.todayTasks || []).some(task => task.name.trim().toLowerCase() === name.toLowerCase());
+        if (isDuplicate) {
+            this.showNotification('Cette tâche existe déjà.', 'error');
+            return;
+        }
         try {
-            await fetch(`/api/todo-tasks/${taskId}/toggle`, { method: 'PUT' });
+            const user_id = this.getCurrentUserId();
+            const response = await fetch('/api/todo-tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, user_id })
+            });
+            if (!response.ok) throw new Error('Erreur lors de l\'ajout');
+            this.todayTaskNameInput.value = '';
             await this.loadTodayTasks();
         } catch (error) {
             this.showNotification(error.message, 'error');
         }
     }
 
+    // Modifie toggleTodayTask pour inclure user_id
+    async toggleTodayTask(taskId) {
+        try {
+            const user_id = this.getCurrentUserId();
+            await fetch(`/api/todo-tasks/${taskId}/toggle`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id })
+            });
+            await this.loadTodayTasks();
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
+    }
+
+    // Modifie deleteTodayTask pour inclure user_id
     async deleteTodayTask(taskId) {
         const task = this.todayTasks.find(t => t.id == taskId);
         this.createConfirmModal(`Supprimer la tâche unique "${task ? task.name : ''}" ?`, async () => {
             try {
-                await fetch(`/api/todo-tasks/${taskId}`, { method: 'DELETE' });
+                const user_id = this.getCurrentUserId();
+                await fetch(`/api/todo-tasks/${taskId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id })
+                });
                 await this.loadTodayTasks();
             } catch (error) {
                 this.showNotification(error.message, 'error');
@@ -1596,7 +1626,26 @@ document.head.appendChild(style);
 let taskManager;
 document.addEventListener('DOMContentLoaded', () => {
     taskManager = new TaskManager();
-}); 
+});
 
+// Drag & Drop avec SortableJS
+window.addEventListener('DOMContentLoaded', function() {
+    // Pour les tâches de la semaine
+    const weekTasksList = document.querySelector('.tasks-list');
+    if (weekTasksList) {
+        new Sortable(weekTasksList, {
+            animation: 150,
+            ghostClass: 'sortable-ghost'
+        });
+    }
+    // Pour les tâches du jour
+    const todayTasksList = document.getElementById('todayTasksList');
+    if (todayTasksList) {
+        new Sortable(todayTasksList, {
+            animation: 150,
+            ghostClass: 'sortable-ghost'
+        });
+    }
+});
 
 // script.js

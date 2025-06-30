@@ -1858,4 +1858,48 @@ body {
     transition: background 0.2s;
 }
 .confirm-modal-btn.cancel { background: #eee; color: #333; }
-.confirm-modal-btn.danger { background: #e74c3c; color: #fff; } 
+.confirm-modal-btn.danger { background: #e74c3c; color: #fff; }
+
+#signupConfirmPassword {
+    background: #e3ebfc;
+} 
+
+.auth-btn, .auth-btn .btn-text {
+    color: #222 !important;
+    font-weight: 600;
+    font-size: 1.1rem;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.auth-btn {
+    width: 100%;
+    padding: 14px 0;
+    background: #f4f8ff !important;
+    color: #2563eb !important;
+    border: 1.5px solid #dbeafe;
+    font-weight: 600;
+    font-size: 1.08rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px #e0e7ef44;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s;
+    letter-spacing: 0.02em;
+    opacity: 1 !important;
+}
+.auth-btn:hover, .auth-btn:focus {
+    background: #e0e7ef !important;
+    color: #1e40af !important;
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 4px 16px #dbeafe55;
+}
+.auth-btn:disabled {
+    background: #e2e8f0;
+    color: #b0b0b0 !important;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.sortable-ghost {
+    opacity: 0.5;
+    background: #dbeafe;
+}
