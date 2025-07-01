@@ -469,11 +469,8 @@ class TaskManager {
                 }
                 const statusClass = this.getStatusClass(validation ? validation.status : -1);
                 const statusText = this.getStatusText(validation ? validation.status : -1);
-                const noteHtml = validation && validation.note
-                    ? `<span class="note-tooltip"><i class="fas fa-comment-alt"></i><span class="tooltip-text">${this.escapeHtml(validation.note)}</span></span>`
-                    : '';
                 const isCurrentDay = date === todayStr;
-                return `<td class="status-cell ${isCurrentDay ? 'current-day-cell' : ''}"><span class="status-indicator ${statusClass}">${statusText}</span>${noteHtml}</td>`;
+                return `<td class="status-cell ${isCurrentDay ? 'current-day-cell' : ''}"><span class="status-indicator ${statusClass}">${statusText}</span></td>`;
             }).join('');
 
             const target = task.target_frequency;
@@ -495,7 +492,7 @@ class TaskManager {
                 <tr>
                     <td class="task-name">
                         ${this.escapeHtml(task.name)}
-                        ${progressText}
+                        ${task.description ? `<span class="info-bubble-container"><button class="info-bubble-btn" type="button" tabindex="0" aria-label="Voir la note">i</button><span class="info-bubble">${this.escapeHtml(task.description)}</span></span>` : ''}
                     </td>
                     ${cells}
                     <td class="percentage-cell">${percentage.toFixed(0)}%</td>
@@ -839,6 +836,9 @@ class TaskManager {
             const progress = this.calculateProgress(task);
             const streakInfo = this.calculateStreak(task);
 
+            const todayValidation = taskValidations.find(v => v.date === todayStr);
+            const todayNote = todayValidation && todayValidation.note ? todayValidation.note : '';
+
             return `
                 <div class="task-item" data-id="${task.id}">
                     <div class="task-header">
@@ -846,9 +846,9 @@ class TaskManager {
                         <div class="task-meta">
                             ${task.target_frequency ? `<span class="task-target" title="Objectif hebdomadaire">🎯 ${progress.completedCount}/${task.target_frequency}</span>` : ''}
                             ${(task.target_frequency && streakInfo.streak > 0) ? `<span class="task-streak" title="Série de validations consécutives">🔥 ${streakInfo.streak}</span>` : ''}
+                            ${task.description ? `<span class="info-bubble-container"><button class="info-bubble-btn" type="button" tabindex="0" aria-label="Voir la note">i</button><span class="info-bubble">${this.escapeHtml(task.description)}</span></span>` : ''}
                         </div>
                     </div>
-                    ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
                     <div class="week-validations">
                         ${taskValidations.map(v => {
                             const statusClass = v.status !== null ? this.getStatusClass(v.status) : 'empty';
@@ -858,10 +858,9 @@ class TaskManager {
                                     <div class="day-label">${v.displayDate}</div>
                                     <div class="task-checkbox ${statusClass} ${!isClickable ? 'future-date' : ''}" 
                                          ${isClickable ? `onclick="taskManager.openValidationModal(${task.id}, '${v.date}')"` : ''}
-                                         title="${v.isFutureDate ? 'Jour futur' : v.note ? this.escapeHtml(v.note) : 'Valider'}">
+                                         title="${v.isFutureDate ? 'Jour futur' : 'Valider'}">
                                         ${this.getStatusText(v.status)}
                                     </div>
-                                    ${v.note ? `<div class="note-indicator" title="${this.escapeHtml(v.note)}">📝</div>` : ''}
                                 </div>
                             `;
                         }).join('')}
@@ -873,6 +872,20 @@ class TaskManager {
                 </div>
             `;
         }).join('');
+
+        document.querySelectorAll('.info-bubble-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const bubble = btn.nextElementSibling;
+                const isActive = bubble.classList.contains('active');
+                document.querySelectorAll('.info-bubble.active').forEach(b => b.classList.remove('active'));
+                if (!isActive) bubble.classList.add('active');
+            });
+        });
+
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.info-bubble.active').forEach(b => b.classList.remove('active'));
+        });
     }
 
     updateStats() {
@@ -1015,8 +1028,9 @@ class TaskManager {
 
     async loadHeatmapData() {
         const year = this.heatmapYearSelect.value;
+        const user_id = this.getCurrentUserId();
         try {
-            const response = await fetch(`/api/heatmap?year=${year}`);
+            const response = await fetch(`/api/heatmap?year=${year}&user_id=${encodeURIComponent(user_id)}`);
             if (!response.ok) throw new Error('Erreur de chargement des données de la heatmap');
             const data = await response.json();
             this.renderHeatmap(data, parseInt(year));

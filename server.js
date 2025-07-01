@@ -211,20 +211,20 @@ app.get('/api/validations/range', (req, res) => {
 });
 
 app.get('/api/heatmap', (req, res) => {
-    const { year } = req.query;
-    if (!year) {
-        return res.status(400).json({ error: 'Year is required' });
+    const { year, user_id } = req.query;
+    if (!year || !user_id) {
+        return res.status(400).json({ error: 'Year et user_id sont requis' });
     }
     const query = `
         SELECT
             date,
             SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) as completion_count
         FROM daily_validations
-        WHERE strftime('%Y', date) = ?
+        WHERE strftime('%Y', date) = ? AND user_id = ?
         GROUP BY date
         HAVING completion_count > 0
     `;
-    db.all(query, [year], (err, rows) => {
+    db.all(query, [year, user_id], (err, rows) => {
         if (err) {
             console.error(err.message);
             return res.status(500).json({ error: 'Erreur serveur' });
